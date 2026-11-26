@@ -16,31 +16,46 @@
       0,
       1,
       "Persist event and outbox",
-      "Lưu event và outbox"
+      "Lưu event và outbox",
+      "The producer commits the business event and outbox record in one local transaction. The payload is immutable and has a stable event ID.",
+      "Producer commit event nghiệp vụ và outbox trong một transaction local. Payload bất biến và có event ID ổn định.",
+      "event_id · outbox"
     ],
     [
       1,
       2,
       "Publish durable delivery task",
-      "Phát delivery task"
+      "Phát delivery task",
+      "A relay resolves matching subscriptions and publishes durable tasks with stable delivery IDs. Publication may be retried, so duplicate tasks are possible.",
+      "Relay tìm subscription phù hợp và phát task bền vững với delivery ID ổn định. Có thể retry publish nên task trùng là có thể.",
+      "delivery_id = stable event/subscription identity"
     ],
     [
       2,
       3,
       "Claim delivery attempt",
-      "Nhận attempt"
+      "Nhận attempt",
+      "A worker claims a task with a visibility timeout or lease and respects per-tenant concurrency limits. It checks the delivery state before sending.",
+      "Worker nhận task bằng visibility timeout hoặc lease và tuân thủ concurrency theo tenant. Kiểm tra trạng thái delivery trước khi gửi.",
+      "Lease · attempt counter"
     ],
     [
       3,
       4,
       "Send signed HTTP request",
-      "Gửi HTTP request có chữ ký"
+      "Gửi HTTP request có chữ ký",
+      "The worker sends a signed HTTP request with a stable delivery ID and bounded connect/read timeouts. Endpoint security controls must prevent unsafe outbound requests.",
+      "Worker gửi HTTP có chữ ký, delivery ID ổn định và timeout kết nối/đọc có giới hạn. Kiểm soát bảo mật endpoint để ngăn request outbound không an toàn.",
+      "HMAC signature · delivery ID"
     ],
     [
       3,
       1,
       "Record response and ack",
-      "Lưu kết quả rồi ack"
+      "Lưu kết quả rồi ack",
+      "After a successful response, persist the attempt result and terminal delivery state before acknowledging the queue. A crash between these operations may still cause redelivery.",
+      "Sau phản hồi thành công, lưu kết quả attempt và trạng thái cuối trước ack queue. Crash giữa hai bước vẫn có thể khiến task được gửi lại.",
+      "DELIVERED → queue ACK"
     ]
   ],
   "failure": [
@@ -48,25 +63,37 @@
       3,
       4,
       "Endpoint times out",
-      "Endpoint timeout"
+      "Endpoint timeout",
+      "The customer's endpoint times out. The receiver may already have applied the event, so a timeout is an ambiguous outcome.",
+      "Endpoint khách hàng timeout. Bên nhận có thể đã xử lý event, do đó kết quả chưa xác định.",
+      "Timeout ≠ not processed"
     ],
     [
       3,
       2,
       "Schedule bounded retry with jitter",
-      "Lên lịch retry giới hạn có jitter"
+      "Lên lịch retry giới hạn có jitter",
+      "Persist the failed attempt and schedule a retry with exponential backoff, jitter and a maximum retry budget; avoid tight retry loops.",
+      "Lưu attempt lỗi và lên lịch retry với exponential backoff, jitter và ngân sách retry tối đa; tránh retry liên tục.",
+      "next_attempt_at · retry budget"
     ],
     [
       2,
       3,
       "Retry using same delivery ID",
-      "Retry với delivery ID cũ"
+      "Retry với delivery ID cũ",
+      "The queue delivers the next attempt. Reuse the stable delivery ID and encourage the receiver to deduplicate before applying its own side effects.",
+      "Queue chuyển attempt tiếp theo. Dùng lại delivery ID ổn định và yêu cầu bên nhận loại trùng trước tác động nghiệp vụ.",
+      "Same delivery ID · new attempt"
     ],
     [
       3,
       1,
       "Persist failure / DLQ after budget",
-      "Lưu thất bại / DLQ khi hết ngân sách retry"
+      "Lưu thất bại / DLQ khi hết ngân sách retry",
+      "If the retry budget is exhausted, store terminal failure and route to a dead-letter workflow for inspection or controlled replay. Otherwise record success normally.",
+      "Nếu hết ngân sách retry, lưu thất bại cuối và chuyển vào quy trình dead-letter để kiểm tra hoặc replay có kiểm soát. Nếu thành công thì lưu bình thường.",
+      "FAILED / DLQ after budget"
     ]
   ],
   "qa": [
@@ -95,5 +122,15 @@
       "Use per-tenant concurrency and rate limits, bounded queues, exponential backoff with jitter, dead-letter handling and observable retry budgets.",
       "Dùng giới hạn concurrency và rate theo tenant, queue có giới hạn, exponential backoff với jitter, DLQ và theo dõi retry budget."
     ]
-  ]
+  ],
+  "workflowNarration": {
+    "normal": [
+      "I use an outbox for durable event publication, a queue for isolation, and workers that respect per-tenant limits. Delivery is at least once, so I provide stable delivery IDs.",
+      "Tôi dùng outbox để phát event bền vững, queue để cách ly và worker tuân thủ giới hạn tenant. Delivery là at-least-once nên cung cấp ID ổn định."
+    ],
+    "failure": [
+      "A timeout does not prove the receiver failed. I retry with the same delivery ID, bounded backoff and a DLQ, while requiring receiver-side deduplication for exactly-once business effects where feasible.",
+      "Timeout không chứng minh bên nhận thất bại. Tôi retry bằng cùng delivery ID, backoff có giới hạn và DLQ; cần bên nhận dedup để đạt tác động nghiệp vụ đúng một lần khi khả thi."
+    ]
+  }
 }
