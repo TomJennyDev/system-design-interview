@@ -1,0 +1,333 @@
+{
+  "stages": [
+    {
+      "title": "01 · Clarify functional requirements",
+      "vi": "Làm rõ yêu cầu chức năng",
+      "qa": [
+        [
+          "Who is limited: an IP, a user, a tenant or a route?",
+          "Giới hạn theo IP, user, tenant hay route?",
+          "I would start with authenticated user and tenant quotas per route. IP-based controls are separate for anonymous abuse, because many legitimate users can share an IP.",
+          "Tôi bắt đầu với quota user đã xác thực và tenant theo route. Giới hạn IP dành riêng cho abuse ẩn danh vì nhiều user hợp lệ có thể chung IP."
+        ],
+        [
+          "Should policies support weighted requests?",
+          "Policy có cần request có trọng số?",
+          "Yes, if endpoints have different resource costs. The gateway derives a trusted cost from the operation, not from a user-controlled field. For a simple first version, each request costs one token.",
+          "Có nếu endpoint có chi phí tài nguyên khác nhau. Gateway xác định cost tin cậy theo thao tác, không lấy từ trường user kiểm soát. Bản đầu mỗi request tốn một token."
+        ],
+        [
+          "What happens when the request is denied?",
+          "Khi request bị từ chối thì sao?",
+          "Return HTTP 429 for quota exhaustion, with Retry-After when we can estimate it. Do not forward denied traffic to the backend. Distinguish policy denial from limiter infrastructure failures.",
+          "Trả HTTP 429 khi hết quota, kèm Retry-After nếu ước lượng được. Không chuyển request bị từ chối vào backend. Phân biệt vi phạm quota với lỗi hạ tầng limiter."
+        ],
+        [
+          "Does the quota need to survive a restart?",
+          "Quota có cần tồn tại qua restart?",
+          "For a strict billing or abuse boundary, yes, within the agreed failure model. For best-effort protection we may accept bounded loss. I would document the guarantee per policy.",
+          "Với quota billing hoặc abuse nghiêm ngặt thì có, trong mô hình lỗi đã thống nhất. Với bảo vệ best-effort có thể chấp nhận mất state có giới hạn. Tôi ghi rõ cam kết từng policy."
+        ]
+      ]
+    },
+    {
+      "title": "02 · Non-functional requirements",
+      "vi": "Yêu cầu phi chức năng",
+      "qa": [
+        [
+          "How precise must the global quota be?",
+          "Quota toàn cục phải chính xác đến đâu?",
+          "I would distinguish strict global quotas from approximate regional budgets. Strict enforcement requires coordination or preallocated capacity; independent regional counters cannot guarantee the same global invariant.",
+          "Tôi phân biệt quota toàn cục nghiêm ngặt với ngân sách vùng xấp xỉ. Thực thi nghiêm cần phối hợp hoặc cấp trước capacity; counter vùng độc lập không giữ bất biến toàn cục."
+        ],
+        [
+          "What latency and availability targets would you propose?",
+          "Đề xuất latency và availability nào?",
+          "As an interview assumption, target p99 limiter overhead below 5 ms within one region and 99.99% decision-path availability. These are design objectives, not measured results. Clarify whether safe denials count as available decisions.",
+          "Giả định phỏng vấn: overhead limiter p99 dưới 5 ms trong một vùng và availability đường quyết định 99,99%. Đây là mục tiêu thiết kế, không phải số đo. Làm rõ safe denial có được tính khả dụng không."
+        ],
+        [
+          "How should burst traffic behave?",
+          "Burst traffic nên xử lý thế nào?",
+          "Separate steady-state rate from burst capacity. For 10 tokens/s with capacity 20, a full bucket permits 20 immediately, then replenishes at 10/s. A strict rolling-window quota would require different semantics.",
+          "Tách rate ổn định khỏi burst capacity. Với 10 token/s và capacity 20, bucket đầy cho 20 ngay, sau đó hồi 10/s. Quota cửa sổ trượt nghiêm cần ngữ nghĩa khác."
+        ],
+        [
+          "What is explicitly out of scope?",
+          "Điều gì nằm ngoài phạm vi?",
+          "I would exclude full DDoS mitigation, billing settlement and adaptive ML abuse detection. They can consume limiter decisions but have different trust, durability and operational requirements.",
+          "Tôi loại chống DDoS toàn diện, quyết toán billing và phát hiện abuse bằng ML. Các hệ thống đó có thể dùng quyết định limiter nhưng có yêu cầu trust, durability và vận hành khác."
+        ]
+      ]
+    },
+    {
+      "title": "03 · Capacity estimation",
+      "vi": "Ước lượng công suất",
+      "qa": [
+        [
+          "Estimate operations at 100,000 requests/s.",
+          "Ước lượng thao tác với 100.000 request/s.",
+          "With one user and one tenant check per request, we may execute 200,000 logical policy checks/s. A single co-located atomic script can reduce round trips, not eliminate the underlying work. Benchmark with realistic key skew.",
+          "Với một check user và một check tenant/request, có thể cần 200.000 check logic/s. Script atomic cùng shard giảm round trip nhưng không loại bỏ công việc. Benchmark với phân bố key thực tế."
+        ],
+        [
+          "Estimate memory for 10 million active buckets.",
+          "Ước lượng RAM cho 10 triệu bucket hoạt động.",
+          "At an assumed 128 bytes of logical state per bucket, that is 1.28 GB before Redis object overhead, key lengths, allocator fragmentation and replication. Measure MEMORY USAGE on representative data and size headroom.",
+          "Giả định 128 byte state logic/bucket, cần 1,28 GB chưa tính overhead object Redis, độ dài key, phân mảnh allocator và replica. Đo MEMORY USAGE trên dữ liệu đại diện rồi tính dư địa."
+        ],
+        [
+          "How many shards are required?",
+          "Cần bao nhiêu shard?",
+          "If a load test establishes 25,000 safe script executions/s per shard and we plan at 70% of that, a 100,000-script/s workload needs ceil(100,000/17,500)=6 primary shards before skew and failure headroom. This is hypothetical sizing, not a Redis benchmark.",
+          "Nếu load test xác định 25.000 script/s an toàn mỗi shard và dùng 70%, tải 100.000 script/s cần ceil(100.000/17.500)=6 primary shard trước khi tính skew và dự phòng lỗi. Đây là tính giả định, không phải benchmark Redis."
+        ]
+      ]
+    },
+    {
+      "title": "04 · Core entities & API",
+      "vi": "Thực thể và API",
+      "qa": [
+        [
+          "What should the policy entity contain?",
+          "Policy gồm trường nào?",
+          "Policy contains scope, algorithm, rate, capacity, cost rule, version and failure behavior. Keep control-plane policy changes separate from the high-volume decision path.",
+          "Policy gồm scope, algorithm, rate, capacity, cost rule, version và hành vi khi lỗi. Tách cập nhật policy control plane khỏi decision path tải cao."
+        ],
+        [
+          "What does the decision API look like?",
+          "API quyết định trông thế nào?",
+          "check(principal, route, cost, policyVersion) returns allowed, remaining and retryAfterMs. The identity and cost are trusted gateway inputs. A timeout returns an explicit unavailable outcome rather than pretending it is a quota denial.",
+          "check(principal, route, cost, policyVersion) trả allowed, remaining và retryAfterMs. Identity/cost là đầu vào tin cậy từ gateway. Timeout trả unavailable rõ ràng, không giả vờ là hết quota."
+        ],
+        [
+          "How do you roll out a policy change?",
+          "Triển khai thay đổi policy thế nào?",
+          "Version policies, propagate asynchronously with a defined freshness bound, and shadow-evaluate new rules before enforcing. Decide how existing bucket balances migrate; resetting all buckets can create unintended bursts.",
+          "Version policy, truyền bất đồng bộ với giới hạn freshness, shadow-evaluate rule mới trước khi thực thi. Quyết định chuyển số dư bucket; reset toàn bộ có thể tạo burst ngoài ý muốn."
+        ]
+      ]
+    },
+    {
+      "title": "05 · Algorithms and correctness",
+      "vi": "Thuật toán và tính đúng đắn",
+      "qa": [
+        [
+          "Why does fixed window allow boundary bursts?",
+          "Tại sao fixed window cho burst ở ranh giới?",
+          "With a limit of 10 per minute, ten requests just before the boundary and ten just after are valid, yet twenty occur in a very short interval. This is not a bug relative to fixed-window semantics; it is a mismatch if the product requires rolling limits.",
+          "Với limit 10/phút, mười request ngay trước ranh giới và mười ngay sau đều hợp lệ nhưng có 20 request trong thời gian ngắn. Không phải lỗi theo fixed window; chỉ không phù hợp nếu cần rolling limit."
+        ],
+        [
+          "When is sliding window log worth the cost?",
+          "Khi nào sliding window log đáng chi phí?",
+          "When exact rolling-window enforcement matters and per-key request rates are bounded. Store accepted timestamps and remove expired entries atomically before counting. Memory grows with accepted events in the active window.",
+          "Khi cần quota cửa sổ trượt chính xác và rate mỗi key có giới hạn. Lưu timestamp request được nhận, xóa entry hết hạn atomic trước khi đếm. RAM tăng theo event được nhận trong cửa sổ."
+        ],
+        [
+          "What error does sliding window counter introduce?",
+          "Sliding window counter có sai số nào?",
+          "It estimates the previous window contribution using the fraction that overlaps the current rolling interval. This assumes roughly uniform arrivals; clustered traffic can be over- or underestimated. Use it only when approximation is acceptable.",
+          "Ước lượng đóng góp cửa sổ trước theo tỷ lệ phần giao. Giả định arrival tương đối đều; traffic tập trung có thể bị ước lượng cao hoặc thấp. Chỉ dùng khi chấp nhận xấp xỉ."
+        ],
+        [
+          "Token bucket versus leaky bucket?",
+          "Token bucket khác leaky bucket thế nào?",
+          "Token bucket accumulates permission to send a bounded burst. A leaky-bucket shaper drains queued requests at a fixed rate, adding delay and a queue bound. A policing variant rejects excess instead of buffering. Clarify which semantics are intended.",
+          "Token bucket tích quyền gửi burst có giới hạn. Leaky-bucket shaper xả request đợi theo tốc độ cố định, tạo delay và giới hạn queue. Biến thể policing từ chối tải dư thay vì buffer. Làm rõ ngữ nghĩa cần dùng."
+        ],
+        [
+          "How do you handle concurrent requests?",
+          "Xử lý request đồng thời thế nào?",
+          "Make the read-refill-check-decrement operation atomic at the authoritative state. A separate GET and SET can let two callers spend the same last token. A Redis script serializes the operation on one primary, but does not by itself guarantee durability across failover.",
+          "Atomic hóa đọc-refill-check-trừ tại state chuẩn. GET và SET riêng có thể khiến hai caller tiêu cùng token cuối. Script Redis tuần tự trên một primary nhưng không tự đảm bảo durability qua failover."
+        ]
+      ]
+    },
+    {
+      "title": "06 · High-level design & scaling",
+      "vi": "Kiến trúc tổng thể và mở rộng",
+      "qa": [
+        [
+          "Where would you place the limiter?",
+          "Đặt limiter ở đâu?",
+          "Use a gateway for shared authenticated API policies and a service-level limiter for expensive resource-specific work. A local edge limiter can absorb obvious bursts before contacting shared state. Avoid enforcing contradictory limits without clear ownership.",
+          "Dùng gateway cho policy API xác thực chung và limiter cấp service cho tài nguyên riêng đắt đỏ. Limiter local edge hấp thụ burst rõ ràng trước shared state. Tránh các limit mâu thuẫn thiếu ownership."
+        ],
+        [
+          "Why not start with an in-memory counter on every gateway?",
+          "Tại sao không bắt đầu bằng counter RAM mỗi gateway?",
+          "That is reasonable for one gateway or approximate per-instance protection. With N independent instances each allowing L requests, the aggregate may reach N×L. A shared authoritative quota or explicitly divided budgets are necessary for cross-instance enforcement.",
+          "Hợp lý cho một gateway hoặc bảo vệ xấp xỉ mỗi instance. N instance độc lập mỗi cái cho L request có thể đạt N×L toàn cục. Cần quota chung chuẩn hoặc ngân sách phân chia rõ để thực thi xuyên instance."
+        ],
+        [
+          "What if one tenant dominates traffic?",
+          "Nếu một tenant chiếm phần lớn traffic?",
+          "A single strict tenant bucket is a serialization point. Hashing user keys spreads user load but not the tenant key. Use admission at edge, consider leased tenant budgets, and quantify the trade-off between coordination and unused quota.",
+          "Một tenant bucket nghiêm là điểm tuần tự. Hash user key phân tán tải user nhưng không phân tán tenant key. Admission ở edge, cân nhắc lease ngân sách tenant và định lượng đánh đổi phối hợp với quota không dùng."
+        ],
+        [
+          "How would you enforce user and tenant limits together?",
+          "Thực thi quota user và tenant cùng lúc thế nào?",
+          "If both keys share a Redis Cluster slot, one script can check and debit both together. Co-location may create hot shards. Across slots, use allocated budgets or a coordinated protocol; sequential debit can consume user quota even if tenant admission fails.",
+          "Nếu hai key cùng Redis Cluster slot, một script check và trừ cả hai atomic. Co-location có thể tạo shard nóng. Khác slot cần ngân sách cấp trước hoặc protocol phối hợp; trừ tuần tự có thể mất quota user dù tenant bị từ chối."
+        ]
+      ]
+    },
+    {
+      "title": "07 · Failure & recovery",
+      "vi": "Sự cố và phục hồi",
+      "qa": [
+        [
+          "What happens if Redis times out after decrementing?",
+          "Redis timeout sau khi đã trừ token thì sao?",
+          "The result is ambiguous. Retrying blindly may charge another token. Decide whether conservative double consumption is acceptable; otherwise use a bounded operation-ID deduplication strategy, and never claim an unknown decision is a confirmed allow.",
+          "Kết quả chưa rõ. Retry mù quáng có thể trừ thêm token. Quyết định chấp nhận trừ dư thận trọng hay dùng dedup operation ID có giới hạn; không coi quyết định chưa rõ là allow đã xác nhận."
+        ],
+        [
+          "What if Redis fails over and loses recent writes?",
+          "Redis failover mất ghi gần nhất thì sao?",
+          "Asynchronous replication can lose acknowledged decrements, reopening quota. Strict policies need a stronger authoritative failure model or conservatively reserved capacity. WAIT alone is not a general linearizability guarantee.",
+          "Replication bất đồng bộ có thể mất decrement đã ack, mở lại quota. Policy nghiêm cần mô hình lỗi nguồn chuẩn mạnh hơn hoặc capacity dự phòng thận trọng. WAIT không tự đảm bảo linearizability tổng quát."
+        ],
+        [
+          "How should regional failover work?",
+          "Failover vùng thế nào?",
+          "Do not reset an entire global quota in the new region. Use fenced or expiring leases with bounded allocations; reclaim only according to a safe lease protocol. If exact global usage is mandatory, prefer denial over unsafe double allocation.",
+          "Không reset toàn bộ quota toàn cục ở vùng mới. Dùng lease có fencing hoặc hết hạn và allocation giới hạn; thu hồi theo protocol lease an toàn. Nếu usage toàn cục phải chính xác, ưu tiên deny hơn cấp trùng."
+        ],
+        [
+          "What if clocks jump or disagree?",
+          "Nếu đồng hồ nhảy hoặc lệch nhau?",
+          "Derive time from the authoritative store for the local bucket, clamp negative elapsed time and preserve the last timestamp against backwards jumps. Large forward jumps can refill early; for strict guarantees define clock assumptions and test failover skew.",
+          "Lấy thời gian từ store chuẩn cho bucket local, chặn elapsed âm và giữ timestamp trước khi đồng hồ lùi. Nhảy tới lớn có thể refill sớm; với cam kết nghiêm phải định nghĩa giả định clock và test skew failover."
+        ]
+      ]
+    },
+    {
+      "title": "08 · Production & trade-offs",
+      "vi": "Production và đánh đổi",
+      "qa": [
+        [
+          "How would you observe quota violations?",
+          "Theo dõi vi phạm quota thế nào?",
+          "Measure allowed, denied and unavailable decisions, p99 overhead, fallback use, hot-key/shard saturation and sampled policy correctness. Avoid unbounded user IDs as metric labels; put high-cardinality details in sampled logs or traces.",
+          "Đo allow, deny, unavailable, overhead p99, fallback, saturation shard/key nóng và tính đúng policy qua lấy mẫu. Tránh user ID cardinality vô hạn làm label metric; đưa chi tiết vào log/trace lấy mẫu."
+        ],
+        [
+          "How do you test this under production-like traffic?",
+          "Test tải gần production thế nào?",
+          "Replay steady traffic, boundary bursts, same-key concurrency and skewed tenants. Inject store timeouts, failover and policy rollout. Compare accepted cost to the algorithm's invariant, plus p99 and backend saturation.",
+          "Replay tải đều, burst ranh giới, concurrent cùng key và tenant lệch tải. Inject timeout store, failover và rollout policy. So accepted cost với bất biến thuật toán, cùng p99 và saturation backend."
+        ],
+        [
+          "What is your final Senior-level summary?",
+          "Tổng kết cấp Senior thế nào?",
+          "I would use gateway token buckets with shared atomic state for burst-tolerant policies, strict rolling logs where precision justifies cost, and independent overload protection. I would explicitly define failure guarantees, test skew and avoid premature multi-region coordination.",
+          "Tôi dùng token bucket ở gateway với state atomic chung cho policy cho burst, rolling log nghiêm khi độ chính xác đáng chi phí và chống quá tải độc lập. Định nghĩa cam kết lỗi, test skew và tránh phối hợp đa vùng quá sớm."
+        ]
+      ]
+    }
+  ],
+  "algorithms": [
+    [
+      "Fixed window counter",
+      "Counter theo cửa sổ cố định",
+      "One counter per window. O(1) state; boundary bursts can reach nearly 2× the window quota.",
+      "Một counter mỗi cửa sổ. State O(1); burst ranh giới có thể gần 2× quota.",
+      "Cheap coarse API quotas / quota thô giá rẻ"
+    ],
+    [
+      "Sliding window log",
+      "Log cửa sổ trượt",
+      "Store accepted timestamps; prune expired entries. Exact rolling admission, O(L) entries for a limit L; sorted-set maintenance adds cost.",
+      "Lưu timestamp được nhận; xóa entry hết hạn. Chính xác rolling, O(L) entry với limit L; tốn duy trì sorted set.",
+      "Strict rolling quotas / quota rolling nghiêm"
+    ],
+    [
+      "Sliding window counter",
+      "Counter cửa sổ trượt",
+      "Estimate rolling count from current and previous buckets. O(1) state; approximate under clustered arrivals.",
+      "Ước lượng count rolling từ bucket hiện tại và trước đó. O(1) state; xấp xỉ khi arrival tập trung.",
+      "General-purpose approximate limits / quota xấp xỉ"
+    ],
+    [
+      "Token bucket",
+      "Xô token",
+      "Refill at a steady rate up to capacity, debit accepted requests. O(1) state; permits bounded bursts.",
+      "Refill theo rate đến capacity, trừ request được nhận. O(1) state; cho burst giới hạn.",
+      "Bursty API traffic / tải API có burst"
+    ],
+    [
+      "Leaky bucket (shaper)",
+      "Xô rò (điều tiết)",
+      "Queue accepted requests up to capacity, drain at a fixed rate. O(B) queue entries if requests are buffered; adds delay.",
+      "Xếp request vào queue đến capacity, xả theo rate cố định. O(B) entry nếu buffer request; tăng delay.",
+      "Smooth downstream processing / làm mượt downstream"
+    ]
+  ],
+  "failures": [
+    [
+      "Race on final token",
+      "Hai request cùng token cuối",
+      "Two non-atomic reads both see one token; both admit. Atomic check/debit allows only one.",
+      "Hai lần đọc không atomic đều thấy một token; cả hai qua. Check/trừ atomic chỉ cho một."
+    ],
+    [
+      "Store outage",
+      "Store mất kết nối",
+      "Distinguish unknown state from quota denial; choose fail closed or bounded local budgets based on route risk.",
+      "Phân biệt state chưa rõ với hết quota; chọn fail closed hoặc quota local giới hạn theo rủi ro."
+    ],
+    [
+      "Replica lag / failover",
+      "Replica lag / failover",
+      "Lost decrements can reopen quota. Test acknowledged write loss and explicitly bound exposure.",
+      "Mất decrement có thể mở quota lại. Test mất ghi đã ack và giới hạn exposure rõ ràng."
+    ],
+    [
+      "Hot tenant",
+      "Tenant nóng",
+      "One strict key saturates a shard. Edge admission and leased budgets help only within specified guarantees.",
+      "Một key nghiêm làm shard bão hòa. Admission edge và lease budget chỉ hữu ích trong cam kết rõ ràng."
+    ],
+    [
+      "Cross-region partition",
+      "Mất kết nối giữa các vùng",
+      "Independent quotas can overshoot; preallocate bounded budgets or deny when coordination is unavailable.",
+      "Quota độc lập có thể vượt; cấp trước ngân sách giới hạn hoặc deny khi không phối hợp được."
+    ],
+    [
+      "Policy rollout",
+      "Triển khai policy",
+      "Resetting balances can create a burst; use versioning, shadow decisions and explicit migration rules.",
+      "Reset số dư tạo burst; dùng version, shadow decision và quy tắc migration."
+    ]
+  ],
+  "sources": [
+    [
+      "Hello Interview — Distributed Rate Limiter",
+      "https://www.hellointerview.com/learn/system-design/problem-breakdowns/distributed-rate-limiter"
+    ],
+    [
+      "Redis — Rate limiter use cases",
+      "https://redis.io/docs/latest/develop/use-cases/rate-limiter/"
+    ],
+    [
+      "Redis — Five algorithm comparison",
+      "https://redis.io/learn/howtos/ratelimiting/"
+    ],
+    [
+      "Redis — Node.js implementation",
+      "https://redis.io/docs/latest/develop/use-cases/rate-limiter/nodejs/"
+    ],
+    [
+      "RFC 6585 — HTTP 429",
+      "https://datatracker.ietf.org/doc/html/rfc6585"
+    ],
+    [
+      "AWS — Control and limit retries",
+      "https://docs.aws.amazon.com/wellarchitected/latest/framework/rel05-bp03.html"
+    ]
+  ]
+}
