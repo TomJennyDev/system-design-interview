@@ -1,0 +1,99 @@
+{
+  "id": "payment",
+  "title": "Payment Gateway",
+  "vi": "Cổng thanh toán",
+  "prompt": "Design a payment service for a marketplace.",
+  "scale": "2,000 peak attempts/s; 99.95% target; no duplicate charges.",
+  "nodes": [
+    "Client",
+    "Payment API",
+    "Payment DB",
+    "Provider",
+    "Reconciler"
+  ],
+  "normal": [
+    [
+      0,
+      1,
+      "Submit idempotency key",
+      "Gửi yêu cầu với khóa idempotency"
+    ],
+    [
+      1,
+      2,
+      "Persist pending attempt",
+      "Lưu trạng thái pending"
+    ],
+    [
+      1,
+      3,
+      "Charge with provider key",
+      "Gọi thanh toán với khóa ổn định"
+    ],
+    [
+      3,
+      1,
+      "Return provider result",
+      "Trả kết quả thanh toán"
+    ],
+    [
+      1,
+      2,
+      "Commit final state",
+      "Lưu trạng thái cuối"
+    ]
+  ],
+  "failure": [
+    [
+      1,
+      3,
+      "Provider charges successfully",
+      "Nhà cung cấp đã trừ tiền"
+    ],
+    [
+      3,
+      1,
+      "Response lost: outcome unknown",
+      "Mất phản hồi: chưa rõ kết quả"
+    ],
+    [
+      4,
+      3,
+      "Query provider by stable key",
+      "Đối soát bằng khóa ổn định"
+    ],
+    [
+      4,
+      2,
+      "Reconcile terminal state",
+      "Cập nhật trạng thái đã xác minh"
+    ]
+  ],
+  "qa": [
+    [
+      "What should you clarify first?",
+      "I would clarify payment methods, refunds, settlement, duplicate-charge tolerance and whether we own card data. I would confirm peak traffic and availability before choosing storage.",
+      "Tôi sẽ làm rõ phương thức thanh toán, hoàn tiền, đối soát, yêu cầu chống trừ tiền trùng và phạm vi dữ liệu thẻ. Sau đó xác định tải đỉnh và availability."
+    ],
+    [
+      "Estimate capacity.",
+      "At 2,000 attempts per second, a sustained peak would produce 172.8 million attempts per day. At 1 KB per attempt, that is about 173 GB/day before indexes and replication. I would ask for average traffic and retention.",
+      "Nếu tải đỉnh kéo dài cả ngày thì có 172,8 triệu lượt/ngày, khoảng 173 GB/ngày với 1 KB/lượt, chưa tính index và replica. Tôi sẽ hỏi tải trung bình và thời gian lưu."
+    ],
+    [
+      "How would you model the API and data?",
+      "POST /payments accepts an idempotency key. GET /payments/{id} returns state. A unique merchant/key constraint and request hash reject conflicting reuse. Store provider reference and immutable attempts.",
+      "POST /payments nhận khóa idempotency; GET /payments/{id} trả trạng thái. Unique constraint theo merchant và key, kèm hash request, ngăn tái sử dụng sai nội dung. Lưu mã provider và lịch sử attempt."
+    ],
+    [
+      "What if the provider times out after charging?",
+      "A timeout is not a decline. Keep the attempt pending, use the same provider idempotency key on a safe retry, and reconcile using status queries or verified webhooks. Never blindly issue another charge.",
+      "Timeout không đồng nghĩa thất bại. Giữ pending, dùng lại khóa provider khi retry an toàn, đối soát bằng API trạng thái hoặc webhook đã xác thực. Không tạo giao dịch mới một cách mù quáng."
+    ],
+    [
+      "Why not use exactly-once Kafka?",
+      "Broker guarantees cannot make an external payment side effect atomic with a database transaction. I use durable state, provider idempotency and reconciliation, with an outbox for downstream events.",
+      "Cam kết của broker không làm giao dịch DB và tác động thanh toán bên ngoài trở thành atomic. Tôi dùng trạng thái bền vững, provider idempotency, đối soát và outbox cho sự kiện downstream."
+    ]
+  ]
+}

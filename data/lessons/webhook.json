@@ -1,0 +1,99 @@
+{
+  "id": "webhook",
+  "title": "Webhook Delivery",
+  "vi": "Hệ thống phân phối webhook",
+  "prompt": "Design reliable webhook delivery to third-party endpoints.",
+  "scale": "50,000 peak events/s; at-least-once; unreliable endpoints.",
+  "nodes": [
+    "Producer",
+    "Event DB",
+    "Queue",
+    "Worker",
+    "Customer"
+  ],
+  "normal": [
+    [
+      0,
+      1,
+      "Persist event and outbox",
+      "Lưu event và outbox"
+    ],
+    [
+      1,
+      2,
+      "Publish durable delivery task",
+      "Phát delivery task"
+    ],
+    [
+      2,
+      3,
+      "Claim delivery attempt",
+      "Nhận attempt"
+    ],
+    [
+      3,
+      4,
+      "Send signed HTTP request",
+      "Gửi HTTP request có chữ ký"
+    ],
+    [
+      3,
+      1,
+      "Record response and ack",
+      "Lưu kết quả rồi ack"
+    ]
+  ],
+  "failure": [
+    [
+      3,
+      4,
+      "Endpoint times out",
+      "Endpoint timeout"
+    ],
+    [
+      3,
+      2,
+      "Schedule bounded retry with jitter",
+      "Lên lịch retry giới hạn có jitter"
+    ],
+    [
+      2,
+      3,
+      "Retry using same delivery ID",
+      "Retry với delivery ID cũ"
+    ],
+    [
+      3,
+      1,
+      "Persist failure / DLQ after budget",
+      "Lưu thất bại / DLQ khi hết ngân sách retry"
+    ]
+  ],
+  "qa": [
+    [
+      "What should you clarify?",
+      "I would confirm subscription filters, delivery latency, retries, ordering, replay and authentication requirements.",
+      "Tôi xác nhận bộ lọc subscription, latency, retry, thứ tự, replay và xác thực."
+    ],
+    [
+      "Estimate fan-out.",
+      "If each event matches three endpoints, 50,000 events/s become 150,000 initial attempts/s. Retry overhead and payload size must be modeled separately.",
+      "Nếu mỗi event khớp ba endpoint thì 50.000 event/s thành 150.000 attempt/s ban đầu. Phải tính riêng retry và kích thước payload."
+    ],
+    [
+      "What is the API and data model?",
+      "Model subscription, immutable event, delivery and attempt. POST /subscriptions registers a validated endpoint; delivery history is queryable by subscription and time.",
+      "Mô hình subscription, event bất biến, delivery và attempt. POST /subscriptions đăng ký endpoint đã xác thực; truy vấn lịch sử theo subscription và thời gian."
+    ],
+    [
+      "What if an endpoint succeeds but the worker crashes?",
+      "Redelivery is possible. Keep a stable delivery ID and document receiver-side deduplication. Persist result before acknowledgment, but acknowledge that external effects cannot be made atomic with our database.",
+      "Có thể gửi lại. Giữ delivery ID ổn định và yêu cầu bên nhận loại trùng. Lưu kết quả trước ack nhưng thừa nhận tác động ngoài không atomic với DB."
+    ],
+    [
+      "How do you handle noisy neighbors?",
+      "Use per-tenant concurrency and rate limits, bounded queues, exponential backoff with jitter, dead-letter handling and observable retry budgets.",
+      "Dùng giới hạn concurrency và rate theo tenant, queue có giới hạn, exponential backoff với jitter, DLQ và theo dõi retry budget."
+    ]
+  ]
+}

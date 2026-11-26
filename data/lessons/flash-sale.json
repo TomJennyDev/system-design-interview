@@ -1,0 +1,93 @@
+{
+  "id": "flash-sale",
+  "title": "Flash Sale Inventory",
+  "vi": "Giữ hàng flash sale",
+  "prompt": "Design inventory reservations without overselling.",
+  "scale": "100,000 peak requests/s; hot SKU; 10-minute reservations.",
+  "nodes": [
+    "Buyer",
+    "Admission API",
+    "Inventory DB",
+    "Payment",
+    "Expiry Worker"
+  ],
+  "normal": [
+    [
+      0,
+      1,
+      "Request reservation",
+      "Yêu cầu giữ hàng"
+    ],
+    [
+      1,
+      2,
+      "Atomic stock decrement + reservation",
+      "Giảm tồn kho và tạo reservation atomically"
+    ],
+    [
+      0,
+      3,
+      "Pay before expiry",
+      "Thanh toán trước hạn"
+    ],
+    [
+      3,
+      2,
+      "Confirm pending reservation",
+      "Xác nhận reservation đang pending"
+    ]
+  ],
+  "failure": [
+    [
+      4,
+      2,
+      "Try pending → expired",
+      "Worker thử chuyển sang expired"
+    ],
+    [
+      3,
+      2,
+      "Concurrent payment confirmation",
+      "Callback thanh toán đồng thời"
+    ],
+    [
+      2,
+      4,
+      "Only one conditional transition wins",
+      "Chỉ một chuyển trạng thái có điều kiện thắng"
+    ],
+    [
+      2,
+      3,
+      "Late payment needs compensation",
+      "Thanh toán muộn cần hoàn tiền/đối soát"
+    ]
+  ],
+  "qa": [
+    [
+      "What would you clarify?",
+      "I would clarify whether stock is global or warehouse-specific, reservation duration, fairness, oversell tolerance and payment deadlines.",
+      "Tôi làm rõ tồn kho theo kho hay toàn hệ thống, thời hạn giữ hàng, công bằng, dung sai bán vượt và hạn thanh toán."
+    ],
+    [
+      "Estimate the hot path.",
+      "100,000 requests/s is admission traffic, not necessarily successful reservations. I would estimate hot-SKU share, available units and rejection rate, then size the write path from accepted operations.",
+      "100.000 request/s là tải đầu vào, không phải số giữ hàng thành công. Tôi ước lượng tỷ lệ SKU nóng, lượng hàng và tỷ lệ từ chối để tính tải ghi thực tế."
+    ],
+    [
+      "How do you prevent overselling?",
+      "Use a conditional UPDATE where available >= quantity and create the reservation in the same transaction. Retry by a unique reservation key. A queue can reduce contention but does not itself enforce the invariant.",
+      "Dùng UPDATE có điều kiện available >= quantity và tạo reservation cùng transaction. Retry theo khóa duy nhất. Queue giảm tranh chấp nhưng không tự bảo đảm invariant."
+    ],
+    [
+      "What if payment and expiration race?",
+      "Both operations conditionally transition the reservation from PENDING in a transaction. Release inventory only if expiration wins. If payment already succeeded but expiration won, reconcile and refund according to policy.",
+      "Cả hai chuyển trạng thái có điều kiện từ PENDING trong transaction. Chỉ trả tồn kho nếu expiration thắng. Nếu đã thanh toán nhưng hết hạn thắng, đối soát và hoàn tiền theo chính sách."
+    ],
+    [
+      "Why not keep all stock in Redis?",
+      "Redis can accelerate admission, but I would define a durable authoritative inventory and recovery plan. A cache failover or lost write must not create additional sellable stock.",
+      "Redis có thể hỗ trợ admission, nhưng cần nguồn tồn kho bền vững và kế hoạch phục hồi. Failover hoặc mất ghi cache không được tạo thêm hàng có thể bán."
+    ]
+  ]
+}

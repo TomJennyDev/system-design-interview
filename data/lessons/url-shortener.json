@@ -1,0 +1,99 @@
+{
+  "id": "url-shortener",
+  "title": "URL Shortener",
+  "vi": "Rút gọn URL",
+  "prompt": "Design a globally scalable URL shortening service.",
+  "scale": "100 million redirects/day; read-heavy; unique short codes.",
+  "nodes": [
+    "Browser",
+    "CDN / API",
+    "Cache",
+    "URL DB",
+    "Analytics Queue"
+  ],
+  "normal": [
+    [
+      0,
+      1,
+      "GET short code",
+      "GET mã ngắn"
+    ],
+    [
+      1,
+      2,
+      "Look up mapping",
+      "Tìm mapping"
+    ],
+    [
+      2,
+      1,
+      "Cache hit returns destination",
+      "Cache hit trả đích"
+    ],
+    [
+      1,
+      0,
+      "302 redirect",
+      "Chuyển hướng 302"
+    ],
+    [
+      1,
+      4,
+      "Emit analytics asynchronously",
+      "Gửi analytics bất đồng bộ"
+    ]
+  ],
+  "failure": [
+    [
+      1,
+      2,
+      "Cache miss or unavailable",
+      "Cache miss hoặc lỗi"
+    ],
+    [
+      1,
+      3,
+      "Read authoritative mapping",
+      "Đọc mapping gốc"
+    ],
+    [
+      3,
+      1,
+      "Return URL under bounded load",
+      "Trả URL với tải được giới hạn"
+    ],
+    [
+      1,
+      0,
+      "Redirect or shed overload",
+      "Redirect hoặc từ chối khi quá tải"
+    ]
+  ],
+  "qa": [
+    [
+      "What should you clarify?",
+      "I would clarify expiration, custom aliases, editability, analytics, abuse prevention and redirect status semantics.",
+      "Tôi làm rõ hết hạn, alias tùy chỉnh, chỉnh sửa, analytics, chống lạm dụng và mã trạng thái redirect."
+    ],
+    [
+      "Estimate read capacity.",
+      "100 million redirects/day is about 1,157 requests/s on average. A hypothetical 10x peak is about 11,570/s. At a 95% hit rate, roughly 579/s reach storage, excluding writes and cache failures.",
+      "100 triệu redirect/ngày khoảng 1.157 request/s trung bình. Đỉnh giả định 10 lần khoảng 11.570/s. Hit rate 95% thì khoảng 579/s vào storage, chưa tính ghi và lỗi cache."
+    ],
+    [
+      "How do you generate unique codes?",
+      "Use a random code with enough entropy and a database unique constraint, retrying collisions. POST /urls creates mappings and GET /{code} redirects after validating status and expiry.",
+      "Dùng code ngẫu nhiên đủ entropy và unique constraint trong DB, retry khi trùng. POST /urls tạo mapping; GET /{code} redirect sau khi kiểm tra trạng thái và hết hạn."
+    ],
+    [
+      "What if a viral URL overloads cache or database?",
+      "I would use CDN caching where semantics allow, request coalescing, TTL jitter, bounded database concurrency and overload protection. Invalidations matter for editable or abusive links.",
+      "Tôi dùng CDN nếu ngữ nghĩa cho phép, gom request trùng, TTL jitter, giới hạn concurrency DB và chống quá tải. Invalidation quan trọng với link chỉnh sửa hoặc lạm dụng."
+    ],
+    [
+      "Why choose 302 rather than 301?",
+      "A 302 offers more control over mutable destinations and measurement, while a 301 may be cached more aggressively. I would choose based on product semantics and explicit cache headers.",
+      "302 cho phép kiểm soát đích thay đổi và đo lường tốt hơn; 301 có thể bị cache mạnh hơn. Tôi chọn theo ngữ nghĩa sản phẩm và cache header rõ ràng."
+    ]
+  ]
+}

@@ -1,0 +1,93 @@
+{
+  "id": "rate-limiter",
+  "title": "Distributed Rate Limiter",
+  "vi": "Giới hạn tốc độ phân tán",
+  "prompt": "Design a rate limiter for a public API.",
+  "scale": "100,000 requests/s; per-user and per-tenant quotas.",
+  "nodes": [
+    "Client",
+    "API Gateway",
+    "Limiter",
+    "Redis",
+    "Backend"
+  ],
+  "normal": [
+    [
+      0,
+      1,
+      "API request",
+      "Request API"
+    ],
+    [
+      1,
+      2,
+      "Check tenant/user policy",
+      "Kiểm tra policy tenant/user"
+    ],
+    [
+      2,
+      3,
+      "Atomic token bucket update",
+      "Cập nhật token bucket atomically"
+    ],
+    [
+      3,
+      2,
+      "Return allow / deny",
+      "Trả allow / deny"
+    ],
+    [
+      1,
+      4,
+      "Forward allowed request",
+      "Chuyển request được phép"
+    ]
+  ],
+  "failure": [
+    [
+      2,
+      3,
+      "Limiter store unavailable",
+      "Kho limiter không khả dụng"
+    ],
+    [
+      2,
+      1,
+      "Apply endpoint-specific fallback",
+      "Áp dụng fallback theo endpoint"
+    ],
+    [
+      1,
+      4,
+      "Local bounded allowance for low-risk API",
+      "Giới hạn local cho API ít rủi ro"
+    ]
+  ],
+  "qa": [
+    [
+      "What should you clarify?",
+      "I would clarify the quota dimension, burst tolerance, time window, fairness, geographic scope and fail-open versus fail-closed policy.",
+      "Tôi làm rõ chiều quota, burst, cửa sổ thời gian, công bằng, phạm vi địa lý và chính sách fail-open/fail-closed."
+    ],
+    [
+      "Estimate load.",
+      "At 100,000 requests/s, one atomic remote operation per request means roughly 100,000 limiter operations/s, multiplied by independent policies unless combined safely.",
+      "100.000 request/s với một thao tác atomic từ xa mỗi request tương ứng khoảng 100.000 thao tác limiter/s, tăng theo số policy độc lập nếu không gộp an toàn."
+    ],
+    [
+      "Which algorithm and state?",
+      "I would use token bucket when controlled bursts are required. Store available tokens and last refill time by quota key, and update both atomically using a server-side script.",
+      "Tôi dùng token bucket khi cần burst có kiểm soát. Lưu token còn lại và thời điểm refill theo quota key, cập nhật atomically bằng script phía server."
+    ],
+    [
+      "What if Redis fails?",
+      "For sensitive endpoints I would fail closed or use a strict local budget. For low-risk reads I might allow a bounded local fallback. The choice is a product and security decision.",
+      "Endpoint nhạy cảm có thể fail closed hoặc dùng quota local nghiêm ngặt. Đọc ít rủi ro có thể dùng fallback local có giới hạn. Đây là quyết định sản phẩm và bảo mật."
+    ],
+    [
+      "Why not use a fixed window?",
+      "Fixed windows are simple but allow bursts across boundaries. Sliding windows improve precision at storage or compute cost; token bucket offers a useful burst-control compromise.",
+      "Fixed window đơn giản nhưng có burst ở ranh giới. Sliding window chính xác hơn đổi lấy chi phí lưu trữ/tính toán; token bucket cân bằng burst và hiệu năng."
+    ]
+  ]
+}

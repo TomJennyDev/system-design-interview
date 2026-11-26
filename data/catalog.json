@@ -1,0 +1,32 @@
+[
+  {
+    "id": "payment",
+    "title": "Payment Gateway",
+    "vi": "Cổng thanh toán"
+  },
+  {
+    "id": "flash-sale",
+    "title": "Flash Sale Inventory",
+    "vi": "Giữ hàng flash sale"
+  },
+  {
+    "id": "chat",
+    "title": "Real-time Chat",
+    "vi": "Nhắn tin thời gian thực"
+  },
+  {
+    "id": "webhook",
+    "title": "Webhook Delivery",
+    "vi": "Hệ thống phân phối webhook"
+  },
+  {
+    "id": "rate-limiter",
+    "title": "Distributed Rate Limiter",
+    "vi": "Giới hạn tốc độ phân tán"
+  },
+  {
+    "id": "url-shortener",
+    "title": "URL Shortener",
+    "vi": "Rút gọn URL"
+  }
+]
