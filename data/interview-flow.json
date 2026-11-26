@@ -1,0 +1,504 @@
+{
+  "stages": [
+    {
+      "id": "functional",
+      "en": "Functional Requirements",
+      "vi": "Yêu cầu chức năng",
+      "minutes": 4
+    },
+    {
+      "id": "nonfunctional",
+      "en": "Non-functional Requirements",
+      "vi": "Yêu cầu phi chức năng",
+      "minutes": 4
+    },
+    {
+      "id": "capacity",
+      "en": "Capacity Estimation",
+      "vi": "Ước lượng tải",
+      "minutes": 4
+    },
+    {
+      "id": "entities",
+      "en": "Core Entities",
+      "vi": "Thực thể dữ liệu",
+      "minutes": 3
+    },
+    {
+      "id": "api",
+      "en": "API Design",
+      "vi": "Thiết kế API",
+      "minutes": 3
+    },
+    {
+      "id": "hld",
+      "en": "High-Level Design",
+      "vi": "Kiến trúc tổng thể",
+      "minutes": 10
+    },
+    {
+      "id": "deepdive",
+      "en": "Deep Dive",
+      "vi": "Phân tích chuyên sâu",
+      "minutes": 8
+    },
+    {
+      "id": "failure",
+      "en": "Failure & Recovery",
+      "vi": "Sự cố và phục hồi",
+      "minutes": 6
+    },
+    {
+      "id": "tradeoffs",
+      "en": "Trade-offs & Wrap-up",
+      "vi": "Đánh đổi và tổng kết",
+      "minutes": 3
+    }
+  ],
+  "cases": {
+    "payment": [
+      {
+        "stage": "functional",
+        "q": "What payment workflows are in scope?",
+        "qvi": "Các luồng thanh toán nào nằm trong phạm vi?",
+        "en": "Before designing, I would confirm whether we support payment creation, status queries and refunds. I would delegate card handling to a payment provider and exclude settlement and disputes from the first version unless required.",
+        "vi": "Trước khi thiết kế, tôi xác nhận có tạo thanh toán, truy vấn trạng thái và hoàn tiền không. Tôi giao xử lý thẻ cho provider, loại đối soát quyết toán và tranh chấp khỏi phiên bản đầu nếu không bắt buộc.",
+        "notes": "Create payment, query status, refund; external provider handles card data."
+      },
+      {
+        "stage": "nonfunctional",
+        "q": "What guarantees matter most?",
+        "qvi": "Những cam kết nào quan trọng nhất?",
+        "en": "I would prioritize preventing duplicate charges and losing confirmed payment state over low response latency. Assume 99.95% availability for our API; provider outages may leave payments pending. I would confirm a latency SLO for acceptance separately from settlement time.",
+        "vi": "Tôi ưu tiên chống trừ tiền trùng và mất trạng thái đã xác nhận hơn latency thấp. Giả định API đạt 99,95% availability; provider lỗi có thể khiến giao dịch pending. Tôi xác nhận SLO latency tiếp nhận riêng với thời gian quyết toán.",
+        "notes": "No duplicate logical charges; 99.95% API target; external outcome may be asynchronous."
+      },
+      {
+        "stage": "capacity",
+        "q": "How much storage and throughput do you need?",
+        "qvi": "Cần bao nhiêu lưu trữ và throughput?",
+        "en": "At 2,000 peak attempts/s, a full day at peak would be 172.8 million attempts. At 1 KB each, about 173 GB/day before indexes and replicas. For sizing I need average load, retry ratio and retention; peak is an upper-bound scenario, not a forecast.",
+        "vi": "2.000 attempt/s nếu duy trì cả ngày là 172,8 triệu attempt, khoảng 173 GB/ngày với 1 KB/attempt, chưa index và replica. Cần tải trung bình, tỷ lệ retry và retention; tải đỉnh cả ngày chỉ là cận trên.",
+        "notes": "2,000/s peak; 1 KB illustrative row size."
+      },
+      {
+        "stage": "entities",
+        "q": "What are the core entities and invariants?",
+        "qvi": "Thực thể và bất biến là gì?",
+        "en": "Payment has merchant_id, amount, currency and status. PaymentAttempt records provider references and outcomes; Refund references the original payment. A unique merchant/key constraint and request hash prevent conflicting retries. State transitions must be conditional.",
+        "vi": "Payment có merchant_id, amount, currency và status. PaymentAttempt lưu mã provider và kết quả; Refund tham chiếu payment gốc. Unique merchant/key và request hash chống retry khác nội dung; chuyển trạng thái phải có điều kiện.",
+        "notes": "Payment, PaymentAttempt, Refund, OutboxEvent."
+      },
+      {
+        "stage": "api",
+        "q": "Define the payment API.",
+        "qvi": "Định nghĩa API thanh toán.",
+        "en": "POST /payments accepts amount, currency and Idempotency-Key, returns an ID and current state. GET /payments/{id} reads authorized status. POST /payments/{id}/refunds has its own key. Reuse with different payload returns a conflict; unknown outcomes remain pending.",
+        "vi": "POST /payments nhận amount, currency và Idempotency-Key, trả ID và trạng thái. GET /payments/{id} đọc trạng thái có phân quyền. POST /payments/{id}/refunds có key riêng. Dùng lại key khác payload trả conflict; kết quả chưa rõ giữ pending.",
+        "notes": "POST /payments; GET /payments/{id}; POST /payments/{id}/refunds."
+      },
+      {
+        "stage": "hld",
+        "q": "Walk me through a payment from request to completion.",
+        "qvi": "Mô tả thanh toán từ request đến hoàn tất.",
+        "en": "The API authenticates and persists a pending attempt before calling the provider with a stable key. On a confirmed result, it conditionally commits the terminal state and optionally an outbox event. A reconciliation worker resolves unknown outcomes. No database transaction spans the network call.",
+        "vi": "API xác thực và lưu pending trước khi gọi provider bằng key ổn định. Khi có kết quả xác nhận, commit trạng thái cuối có điều kiện và có thể kèm outbox. Worker đối soát kết quả chưa rõ. Không giữ transaction DB xuyên qua cuộc gọi mạng.",
+        "notes": "Client → Payment API → DB / Provider; Reconciler resolves pending."
+      },
+      {
+        "stage": "deepdive",
+        "q": "Can two workers charge the same payment?",
+        "qvi": "Hai worker có thể trừ tiền cùng giao dịch không?",
+        "en": "A local unique key prevents duplicate attempts, but it cannot alone protect external side effects. Both workers must use the same provider idempotency key; conditional state updates prevent conflicting terminal writes. Check the provider's deduplication window and reconcile before retrying beyond it.",
+        "vi": "Unique key local chống attempt trùng nhưng không tự bảo vệ tác động ngoài. Hai worker dùng cùng key provider; cập nhật có điều kiện chống ghi trạng thái cuối xung đột. Kiểm tra thời hạn dedup provider và đối soát trước retry vượt hạn.",
+        "notes": "Unique key + provider dedup + conditional transition."
+      },
+      {
+        "stage": "failure",
+        "q": "The provider charged but our API crashed. What now?",
+        "qvi": "Provider đã trừ tiền nhưng API crash. Làm sao?",
+        "en": "Keep the attempt pending and query by stable provider reference or key. Use verified webhooks as additional evidence; reconcile and persist the confirmed state once. If the provider cannot confirm, escalate rather than blindly issuing another charge.",
+        "vi": "Giữ attempt pending, truy vấn bằng reference hoặc key ổn định. Dùng webhook xác thực làm bằng chứng bổ sung, đối soát rồi lưu trạng thái xác nhận một lần. Nếu không xác minh được thì chuyển xử lý thủ công, không trừ tiền lại mù quáng.",
+        "notes": "Pending → reconciliation → confirmed terminal state."
+      },
+      {
+        "stage": "tradeoffs",
+        "q": "Why not use a distributed transaction across the provider?",
+        "qvi": "Tại sao không dùng distributed transaction xuyên provider?",
+        "en": "A third-party provider usually does not participate in our atomic transaction. Durable local state, provider idempotency and reconciliation are practical, at the cost of temporary pending states and operational complexity. I would monitor pending age and reconciliation success.",
+        "vi": "Provider bên thứ ba thường không tham gia transaction atomic của ta. Trạng thái local bền vững, idempotency và đối soát thực tế hơn, đổi lại có pending tạm thời và vận hành phức tạp. Theo dõi tuổi pending và tỷ lệ đối soát thành công.",
+        "notes": "Correctness first; pending state is explicit."
+      }
+    ],
+    "flash-sale": [
+      {
+        "stage": "functional",
+        "q": "Which inventory operations are required?",
+        "qvi": "Cần các chức năng tồn kho nào?",
+        "en": "I would support reserving a SKU and quantity, confirming payment, expiring or canceling a reservation and reporting availability. I would clarify warehouse scope, reservation duration and the late-payment refund policy.",
+        "vi": "Tôi hỗ trợ giữ SKU và số lượng, xác nhận thanh toán, hết hạn/hủy giữ hàng và xem tồn kho. Tôi làm rõ phạm vi kho, thời hạn giữ và chính sách hoàn tiền muộn.",
+        "notes": "Reserve, confirm, expire/cancel, availability."
+      },
+      {
+        "stage": "nonfunctional",
+        "q": "What must never happen during a flash sale?",
+        "qvi": "Điều gì tuyệt đối không được xảy ra?",
+        "en": "We must never allocate more stock than exists. I assume 100,000 incoming requests/s, a hot SKU and ten-minute reservations. Admission may reject overload; fairness and latency targets must be agreed separately.",
+        "vi": "Không được phân bổ vượt tồn kho. Giả định 100.000 request/s đầu vào, SKU nóng và giữ hàng 10 phút. Admission có thể từ chối quá tải; công bằng và latency cần thống nhất riêng.",
+        "notes": "No oversell; bounded overload; hot-key skew."
+      },
+      {
+        "stage": "capacity",
+        "q": "How would you estimate accepted writes?",
+        "qvi": "Ước lượng ghi được chấp nhận ra sao?",
+        "en": "Incoming requests are not successful writes. With 10,000 units and one unit per order, at most 10,000 initial successful reservations can consume those units before release or restock. Size admission for offered load and database for accepted attempts, conflicts and expiry.",
+        "vi": "Request đầu vào không phải ghi thành công. Với 10.000 sản phẩm, mỗi đơn một món, tối đa 10.000 lượt giữ ban đầu tiêu thụ chúng trước khi trả hoặc nhập thêm. Tính admission theo tải đến và DB theo attempt được nhận, xung đột và hết hạn.",
+        "notes": "100k offered QPS; stock and rejection rate constrain writes."
+      },
+      {
+        "stage": "entities",
+        "q": "Which entities enforce the stock invariant?",
+        "qvi": "Thực thể nào bảo toàn tồn kho?",
+        "en": "Inventory stores SKU and available quantity. Reservation stores ID, SKU, quantity, state and expires_at. Payment references reservation ID. The decrement and reservation creation are atomic; stock release occurs only when an eligible transition wins.",
+        "vi": "Inventory lưu SKU và available. Reservation lưu ID, SKU, quantity, state, expires_at. Payment tham chiếu reservation ID. Giảm tồn kho và tạo reservation atomic; chỉ trả hàng khi chuyển trạng thái hợp lệ thắng.",
+        "notes": "Inventory, Reservation, Payment."
+      },
+      {
+        "stage": "api",
+        "q": "How would clients reserve and confirm stock?",
+        "qvi": "Client giữ và xác nhận hàng thế nào?",
+        "en": "POST /reservations accepts SKU, quantity and a stable request key; return reservation ID and expiry. GET /reservations/{id} returns state. A verified payment callback confirms it; return sold-out or rate-limit errors explicitly.",
+        "vi": "POST /reservations nhận SKU, quantity và key ổn định; trả ID và hạn. GET /reservations/{id} trả trạng thái. Callback thanh toán đã xác minh thực hiện confirm; trả lỗi hết hàng hoặc rate-limit rõ ràng.",
+        "notes": "POST /reservations; GET /reservations/{id}; payment callback."
+      },
+      {
+        "stage": "hld",
+        "q": "Describe the architecture.",
+        "qvi": "Mô tả kiến trúc tổng thể.",
+        "en": "Admission control limits requests before the inventory transaction. The authoritative database conditionally decrements stock and creates the reservation. Payment occurs outside the lock. An expiry worker and callback compete through conditional state transitions.",
+        "vi": "Admission control giới hạn request trước transaction tồn kho. DB nguồn chuẩn giảm tồn kho có điều kiện và tạo reservation. Thanh toán bên ngoài lock. Worker hết hạn và callback cạnh tranh bằng chuyển trạng thái có điều kiện.",
+        "notes": "Buyer → Admission API → Inventory DB; Payment and Expiry Worker."
+      },
+      {
+        "stage": "deepdive",
+        "q": "How do you handle a hot SKU?",
+        "qvi": "Xử lý SKU nóng thế nào?",
+        "en": "Measure lock waits, accepted throughput and retry rate. Bound concurrency per SKU and shed excess attempts early. Partition only if stock allocation is explicit and rebalancing preserves the global invariant.",
+        "vi": "Đo lock wait, throughput được nhận và tỷ lệ retry. Giới hạn concurrency theo SKU và từ chối sớm. Chỉ partition khi phân bổ tồn kho rõ ràng và cân bằng lại vẫn bảo toàn bất biến toàn cục.",
+        "notes": "Hot-key lock contention → admission control."
+      },
+      {
+        "stage": "failure",
+        "q": "Payment and expiration happen together. Which wins?",
+        "qvi": "Thanh toán và hết hạn đồng thời. Bên nào thắng?",
+        "en": "Both conditionally update the same pending reservation within a transaction according to the expiry policy. Only one transition wins. If expiry wins after payment succeeds, compensate through a refund or reconciliation, never silently oversell.",
+        "vi": "Cả hai update có điều kiện cùng reservation pending trong transaction theo chính sách hạn. Chỉ một bên thắng. Nếu expiry thắng sau thanh toán thành công, hoàn tiền/đối soát, không bán vượt âm thầm.",
+        "notes": "PENDING → CONFIRMED or EXPIRED; compensation if needed."
+      },
+      {
+        "stage": "tradeoffs",
+        "q": "Why not use Redis alone for inventory?",
+        "qvi": "Tại sao không chỉ dùng Redis?",
+        "en": "Redis can reduce admission pressure but durability and failover semantics must preserve the stock invariant. I would start with an authoritative transactional store, then consider allocated quotas or partitioning if measured contention demands it.",
+        "vi": "Redis giảm áp lực admission nhưng durability và failover phải bảo toàn tồn kho. Tôi bắt đầu với DB transaction chuẩn, rồi cân nhắc quota phân bổ hoặc partition nếu contention đo được yêu cầu.",
+        "notes": "Correctness vs throughput; measure before redesign."
+      }
+    ],
+    "chat": [
+      {
+        "stage": "functional",
+        "q": "What chat features are required?",
+        "qvi": "Cần chức năng chat nào?",
+        "en": "I would support one-to-one and group messages, offline history and reconnect. I would clarify group size, media, delivery receipts, multi-device behavior and retention; defer optional features unless essential.",
+        "vi": "Tôi hỗ trợ chat cá nhân và nhóm, lịch sử offline và reconnect. Làm rõ kích thước nhóm, media, receipt, đa thiết bị và retention; hoãn chức năng tùy chọn.",
+        "notes": "Send, receive, history, reconnect."
+      },
+      {
+        "stage": "nonfunctional",
+        "q": "What ordering and latency guarantees do we need?",
+        "qvi": "Cần cam kết thứ tự và latency nào?",
+        "en": "I would require durable acceptance and ordering within a conversation, not global ordering. Online delivery should be low latency, with explicit targets agreed for p95; offline delivery is asynchronous and may replay duplicates.",
+        "vi": "Tôi yêu cầu tiếp nhận bền vững và thứ tự theo hội thoại, không toàn cục. Gửi online latency thấp với p95 thống nhất; gửi offline bất đồng bộ và có thể replay trùng.",
+        "notes": "Per-conversation ordering, durable acceptance, low-latency delivery."
+      },
+      {
+        "stage": "capacity",
+        "q": "Estimate message traffic.",
+        "qvi": "Ước lượng tải tin nhắn.",
+        "en": "10 million DAU × 40 messages/day = 400 million messages/day, about 4,630 writes/s average and 23,150/s at an assumed 5x peak. Fan-out, concurrent connections and attachments need separate estimates.",
+        "vi": "10 triệu DAU × 40 tin/ngày = 400 triệu tin/ngày, trung bình 4.630 ghi/s và 23.150/s nếu đỉnh gấp 5. Fan-out, kết nối đồng thời và attachment cần tính riêng.",
+        "notes": "Assume 40 messages/user/day; 5x peak."
+      },
+      {
+        "stage": "entities",
+        "q": "How would you model messages?",
+        "qvi": "Mô hình dữ liệu tin nhắn thế nào?",
+        "en": "Conversation and Membership define authorization; Message stores conversation_id, sequence, sender and client ID. Index conversation and sequence for history. Deduplicate by a sender-scoped client ID and maintain a cursor per device if needed.",
+        "vi": "Conversation và Membership xác định quyền; Message lưu conversation_id, sequence, sender, client ID. Index conversation và sequence cho lịch sử. Dedup client ID theo sender và lưu cursor mỗi thiết bị nếu cần.",
+        "notes": "Conversation, Membership, Message, DeviceCursor."
+      },
+      {
+        "stage": "api",
+        "q": "What APIs and protocols do clients use?",
+        "qvi": "Client dùng API và protocol nào?",
+        "en": "Use authenticated WebSocket for live send and delivery, and a cursor-based GET /conversations/{id}/messages for history. A send acknowledgment includes the durable message ID and sequence. Reconnect supplies last seen sequence.",
+        "vi": "Dùng WebSocket xác thực cho gửi/nhận live và GET /conversations/{id}/messages theo cursor cho lịch sử. Ack gửi gồm message ID bền vững và sequence. Reconnect cung cấp sequence cuối.",
+        "notes": "WebSocket SEND/ACK; GET messages?after=cursor."
+      },
+      {
+        "stage": "hld",
+        "q": "Walk through the message delivery path.",
+        "qvi": "Mô tả đường đi tin nhắn.",
+        "en": "The gateway authenticates membership, persists a deduplicated message and its conversation sequence, then acknowledges the sender. An outbox relay publishes the event; a delivery consumer routes it to the recipient gateway. Offline history stays in storage.",
+        "vi": "Gateway xác thực membership, lưu message đã dedup và sequence theo hội thoại, rồi ack sender. Outbox relay phát event; consumer định tuyến đến gateway người nhận. Lịch sử offline ở storage.",
+        "notes": "Sender → WS Gateway → Store → Event Bus → Recipient."
+      },
+      {
+        "stage": "deepdive",
+        "q": "How do you handle large groups and ordering?",
+        "qvi": "Xử lý nhóm lớn và thứ tự thế nào?",
+        "en": "Partition by conversation for ordering, but large groups may create hot partitions. Separate ordered persistence from fan-out, batch delivery and apply backpressure. Avoid promising global order across independent conversations.",
+        "vi": "Partition theo hội thoại để giữ thứ tự nhưng nhóm lớn có thể tạo hot partition. Tách ghi có thứ tự khỏi fan-out, gửi theo batch và backpressure. Không hứa thứ tự toàn cục.",
+        "notes": "Ordered writes vs parallel fan-out."
+      },
+      {
+        "stage": "failure",
+        "q": "How does a disconnected client catch up?",
+        "qvi": "Client mất kết nối tải bù thế nào?",
+        "en": "Authenticate on reconnect, establish a live subscription and a replay boundary, then fetch authorized messages after the durable cursor. Merge buffered live events, deduplicate by ID and detect sequence gaps before advancing the cursor.",
+        "vi": "Xác thực khi reconnect, thiết lập subscription và ranh giới replay, đọc tin được phép sau cursor bền vững. Hợp nhất event live buffer, dedup ID và phát hiện gap trước khi tăng cursor.",
+        "notes": "History + buffered live events → dedup → cursor."
+      },
+      {
+        "stage": "tradeoffs",
+        "q": "Why use a persistent store instead of just pub/sub?",
+        "qvi": "Tại sao dùng persistent store thay vì chỉ pub/sub?",
+        "en": "Pub/sub alone may lose offline messages and cannot provide reliable history. A persistent store adds write latency and storage cost but enables replay and durable acknowledgment. I would monitor delivery lag and storage growth.",
+        "vi": "Chỉ pub/sub có thể mất tin offline và không cung cấp lịch sử đáng tin. Store bền vững tăng latency ghi và chi phí nhưng hỗ trợ replay và ack bền vững. Theo dõi lag và tăng trưởng storage.",
+        "notes": "Durability vs storage and write latency."
+      }
+    ],
+    "webhook": [
+      {
+        "stage": "functional",
+        "q": "What should a webhook platform support?",
+        "qvi": "Nền tảng webhook cần chức năng nào?",
+        "en": "Register endpoints and event filters, deliver signed events, retry failures and expose delivery history and controlled replay. Clarify ordering per subscription, retention and endpoint ownership verification.",
+        "vi": "Đăng ký endpoint và filter event, gửi event ký, retry lỗi, xem lịch sử và replay kiểm soát. Làm rõ thứ tự theo subscription, retention và xác minh quyền endpoint.",
+        "notes": "Subscriptions, signed delivery, retry, history, replay."
+      },
+      {
+        "stage": "nonfunctional",
+        "q": "What delivery guarantee is realistic?",
+        "qvi": "Cam kết delivery nào thực tế?",
+        "en": "At-least-once is realistic because HTTP outcomes can be ambiguous. I would agree on delivery latency and retry horizon, isolate slow tenants and avoid claiming exactly-once external side effects.",
+        "vi": "At-least-once thực tế vì kết quả HTTP có thể mơ hồ. Thống nhất latency và thời hạn retry, cách ly tenant chậm, không khẳng định tác động ngoài exactly-once.",
+        "notes": "50k events/s peak; at-least-once; bounded retries."
+      },
+      {
+        "stage": "capacity",
+        "q": "How do you estimate delivery capacity?",
+        "qvi": "Ước lượng công suất delivery thế nào?",
+        "en": "If each event matches three subscriptions, 50,000 events/s means 150,000 initial delivery attempts/s. Estimate retry amplification and in-flight concurrency as rate times mean service time; at 200 ms mean, roughly 30,000 initial in-flight attempts.",
+        "vi": "Nếu mỗi event khớp ba subscription, 50.000 event/s thành 150.000 attempt/s ban đầu. Tính retry và concurrency theo rate nhân thời gian xử lý trung bình; mean 200 ms khoảng 30.000 attempt đang chạy.",
+        "notes": "Fan-out × events; retry and network latency affect concurrency."
+      },
+      {
+        "stage": "entities",
+        "q": "What entities are needed?",
+        "qvi": "Cần thực thể nào?",
+        "en": "Subscription defines endpoint and filters, Event is immutable, Delivery binds event to subscription with a stable ID, and Attempt records each HTTP result. Index history by tenant/subscription and time.",
+        "vi": "Subscription định nghĩa endpoint và filter, Event bất biến, Delivery gắn event với subscription bằng ID ổn định, Attempt lưu từng kết quả HTTP. Index lịch sử theo tenant/subscription và thời gian.",
+        "notes": "Subscription, Event, Delivery, Attempt, Outbox."
+      },
+      {
+        "stage": "api",
+        "q": "Define the control-plane API.",
+        "qvi": "Định nghĩa API quản lý.",
+        "en": "POST /subscriptions registers a verified endpoint, GET /deliveries?subscription_id=... lists history, and POST /deliveries/{id}/replay initiates an authorized replay. Define whether replay retains delivery identity and document receiver dedup semantics.",
+        "vi": "POST /subscriptions đăng ký endpoint đã xác minh, GET /deliveries?subscription_id=... liệt kê lịch sử, POST /deliveries/{id}/replay khởi tạo replay có phân quyền. Xác định replay có giữ ID không và tài liệu dedup bên nhận.",
+        "notes": "Create subscription, query delivery, controlled replay."
+      },
+      {
+        "stage": "hld",
+        "q": "How does a business event reach the customer?",
+        "qvi": "Event nghiệp vụ đến khách hàng thế nào?",
+        "en": "The producer commits event and outbox atomically. A relay expands subscriptions into durable queue tasks. Workers claim tasks with leases, sign requests and enforce per-tenant limits. Persist delivery outcomes before acknowledging tasks.",
+        "vi": "Producer commit event và outbox atomic. Relay mở rộng subscription thành task queue bền vững. Worker claim bằng lease, ký request và giới hạn tenant. Lưu kết quả trước ack task.",
+        "notes": "Producer → Event DB → Queue → Worker → Customer."
+      },
+      {
+        "stage": "deepdive",
+        "q": "How do you isolate slow endpoints?",
+        "qvi": "Cách ly endpoint chậm thế nào?",
+        "en": "Set connect and request deadlines, per-tenant and per-endpoint concurrency limits, delayed retries and bounded queues. Avoid a single global worker pool where slow destinations consume every slot.",
+        "vi": "Đặt deadline kết nối/request, giới hạn concurrency theo tenant/endpoint, retry trễ và queue giới hạn. Tránh pool toàn cục để endpoint chậm chiếm mọi slot.",
+        "notes": "Fair scheduling, bulkheads, backpressure."
+      },
+      {
+        "stage": "failure",
+        "q": "The worker crashes after delivery but before ack. What happens?",
+        "qvi": "Worker crash sau gửi nhưng trước ack thì sao?",
+        "en": "The task may be redelivered. Check durable delivery state before sending; if the previous external outcome is unknown, retry with the same delivery ID. The receiver must deduplicate to protect its own side effects.",
+        "vi": "Task có thể được gửi lại. Kiểm tra trạng thái delivery bền vững trước gửi; nếu kết quả ngoài chưa rõ, retry cùng delivery ID. Bên nhận phải dedup để bảo vệ tác động nghiệp vụ.",
+        "notes": "Stable delivery ID + receiver dedup + bounded retry/DLQ."
+      },
+      {
+        "stage": "tradeoffs",
+        "q": "Why not synchronous fan-out?",
+        "qvi": "Tại sao không fan-out đồng bộ?",
+        "en": "Synchronous fan-out couples producer latency and availability to every customer endpoint. Queued delivery isolates them but introduces lag, duplicate handling and queue operations. I would monitor oldest task age and per-tenant success rate.",
+        "vi": "Fan-out đồng bộ gắn latency và availability producer với mọi endpoint. Queue cách ly nhưng tạo lag, xử lý trùng và vận hành queue. Theo dõi tuổi task lâu nhất và tỷ lệ thành công theo tenant.",
+        "notes": "Isolation vs eventual delivery and operational cost."
+      }
+    ],
+    "rate-limiter": [
+      {
+        "stage": "functional",
+        "q": "What quotas should the limiter enforce?",
+        "qvi": "Limiter cần áp dụng quota nào?",
+        "en": "Clarify per-user, tenant, route and IP quotas, burst allowance, policy updates and response headers. Distinguish authenticated identity limits from anonymous abuse controls.",
+        "vi": "Làm rõ quota theo user, tenant, route, IP, burst, cập nhật policy và response header. Phân biệt giới hạn danh tính xác thực với chống abuse ẩn danh.",
+        "notes": "Allow/deny, policy configuration, quota headers."
+      },
+      {
+        "stage": "nonfunctional",
+        "q": "How precise and available must it be?",
+        "qvi": "Độ chính xác và availability cần thế nào?",
+        "en": "I would agree on allowed burst, global versus regional precision and latency overhead at 100,000 requests/s. Sensitive endpoints may need fail-closed behavior while low-risk reads may tolerate bounded approximation.",
+        "vi": "Thống nhất burst, độ chính xác toàn cục hay theo vùng và latency overhead ở 100.000 request/s. Endpoint nhạy cảm có thể cần fail closed; đọc ít rủi ro chấp nhận xấp xỉ có giới hạn.",
+        "notes": "Low overhead; explicit failure policy; quota accuracy."
+      },
+      {
+        "stage": "capacity",
+        "q": "Estimate limiter operation rate.",
+        "qvi": "Ước lượng tải limiter.",
+        "en": "One remote atomic operation per request is 100,000 operations/s at peak. Multiple independent policies multiply work unless safely combined. Measure hot tenant keys, network round trips and store throughput before sizing shards.",
+        "vi": "Một thao tác atomic từ xa/request là 100.000 thao tác/s đỉnh. Nhiều policy độc lập làm tăng tải nếu không gộp an toàn. Đo key tenant nóng, network RTT và throughput store trước khi chia shard.",
+        "notes": "100k requests/s × policy checks."
+      },
+      {
+        "stage": "entities",
+        "q": "What is the data model?",
+        "qvi": "Mô hình dữ liệu là gì?",
+        "en": "QuotaPolicy stores capacity, refill rate and scope. BucketState contains remaining tokens and last refill time by verified quota key, with expiry for idle buckets. Version policies to handle updates consistently.",
+        "vi": "QuotaPolicy lưu capacity, refill rate và scope. BucketState có token còn lại và thời điểm refill theo quota key xác minh, hết hạn bucket nhàn rỗi. Version policy để cập nhật nhất quán.",
+        "notes": "QuotaPolicy, BucketState, verified quota key."
+      },
+      {
+        "stage": "api",
+        "q": "How does the gateway call the limiter?",
+        "qvi": "Gateway gọi limiter thế nào?",
+        "en": "A check(identity, route, cost) operation returns allow, remaining budget and retry delay. Gateway derives identity from verified authentication and returns HTTP 429 on policy denial. Distinguish backend overload from policy rejection.",
+        "vi": "Thao tác check(identity, route, cost) trả allow, quota còn và thời gian retry. Gateway lấy danh tính từ xác thực và trả HTTP 429 khi vi phạm policy. Phân biệt quá tải backend với từ chối quota.",
+        "notes": "check(identity, route, cost) → decision."
+      },
+      {
+        "stage": "hld",
+        "q": "Walk me through the request path.",
+        "qvi": "Mô tả luồng request.",
+        "en": "The gateway authenticates the caller, resolves applicable policy and calls the limiter. Redis atomically refills and consumes tokens. The limiter returns allow or deny; only allowed requests reach the backend.",
+        "vi": "Gateway xác thực caller, tìm policy áp dụng rồi gọi limiter. Redis refill và trừ token atomic. Limiter trả allow/deny; chỉ request được phép đến backend.",
+        "notes": "Client → Gateway → Limiter → Redis; allowed → Backend."
+      },
+      {
+        "stage": "deepdive",
+        "q": "Why must the token update be atomic?",
+        "qvi": "Tại sao update token phải atomic?",
+        "en": "Two requests can otherwise read the same remaining token and both pass. An atomic server-side operation calculates refill and decrement together. Multi-key tenant/user checks need an explicit atomicity or conservative reservation strategy.",
+        "vi": "Hai request có thể đọc cùng token và đều qua nếu không atomic. Thao tác atomic phía server tính refill và decrement cùng nhau. Kiểm tra nhiều key tenant/user cần chiến lược atomic hoặc reservation thận trọng.",
+        "notes": "Atomic read-modify-write; avoid double consumption."
+      },
+      {
+        "stage": "failure",
+        "q": "What if the quota store is unavailable?",
+        "qvi": "Kho quota không khả dụng thì sao?",
+        "en": "Use strict deadlines and a route-specific fallback. Fail closed for sensitive writes or use a strict local allowance; low-risk reads may use bounded local budgets. Local allowances do not preserve strict global quotas, so cap exposure and monitor recovery.",
+        "vi": "Dùng deadline nghiêm ngặt và fallback theo route. Fail closed cho ghi nhạy cảm hoặc quota local nghiêm; đọc ít rủi ro dùng ngân sách local giới hạn. Quota local không giữ giới hạn toàn cục tuyệt đối nên giới hạn rủi ro và theo dõi phục hồi.",
+        "notes": "Store timeout → risk-based fallback."
+      },
+      {
+        "stage": "tradeoffs",
+        "q": "Token bucket or sliding window?",
+        "qvi": "Token bucket hay sliding window?",
+        "en": "Token bucket is attractive for controlled bursts with compact state. Sliding windows can offer precise rolling-window limits at higher storage or computation cost. I would choose based on policy semantics, not a generic benchmark.",
+        "vi": "Token bucket phù hợp burst có kiểm soát và state gọn. Sliding window chính xác theo cửa sổ trượt hơn nhưng tốn storage/compute. Chọn theo ngữ nghĩa policy, không dựa benchmark chung.",
+        "notes": "Burst tolerance vs precision and state cost."
+      }
+    ],
+    "url-shortener": [
+      {
+        "stage": "functional",
+        "q": "What features should the URL shortener provide?",
+        "qvi": "URL shortener cần chức năng nào?",
+        "en": "Create short links and redirect to destinations. Clarify custom aliases, expiration, edits, abuse blocking and analytics. For the first version, prioritize correct redirects and unique codes.",
+        "vi": "Tạo link ngắn và redirect. Làm rõ alias tùy chỉnh, hết hạn, chỉnh sửa, chặn lạm dụng và analytics. Phiên bản đầu ưu tiên redirect đúng và code duy nhất.",
+        "notes": "Create, redirect, expire/edit if required, analytics."
+      },
+      {
+        "stage": "nonfunctional",
+        "q": "What are the key quality requirements?",
+        "qvi": "Yêu cầu chất lượng chính là gì?",
+        "en": "The read path should be low latency and highly available. Codes must be unique; stale redirects must respect deletion, edits and abuse-blocking policy. I would agree on p95 latency and acceptable invalidation delay.",
+        "vi": "Đường đọc cần latency thấp và availability cao. Code phải duy nhất; redirect cũ phải tuân thủ xóa, chỉnh sửa và chặn abuse. Thống nhất p95 và độ trễ invalidation cho phép.",
+        "notes": "Read-heavy; unique codes; bounded staleness."
+      },
+      {
+        "stage": "capacity",
+        "q": "How many requests reach the database?",
+        "qvi": "Bao nhiêu request tới database?",
+        "en": "100 million redirects/day is roughly 1,157/s average. A hypothetical 10x peak is 11,570/s. At 95% cache hit, about 579 peak reads/s reach storage, excluding writes and cache failures.",
+        "vi": "100 triệu redirect/ngày khoảng 1.157/s trung bình; đỉnh giả định 10 lần là 11.570/s. Hit rate 95% thì khoảng 579 read/s đỉnh tới storage, chưa tính ghi và lỗi cache.",
+        "notes": "Average/peak QPS; cache miss ratio."
+      },
+      {
+        "stage": "entities",
+        "q": "Which entities and keys would you use?",
+        "qvi": "Dùng thực thể và khóa nào?",
+        "en": "URLMapping stores unique short_code, destination, owner, status and expiry. ClickEvent is append-oriented analytics data. Index the unique code for redirects and owner/time for listing. Keep analytics separate from the read path.",
+        "vi": "URLMapping lưu short_code duy nhất, destination, owner, status và expiry. ClickEvent là analytics dạng append. Index code duy nhất cho redirect và owner/time cho danh sách. Tách analytics khỏi đường đọc.",
+        "notes": "URLMapping, ClickEvent, unique short_code."
+      },
+      {
+        "stage": "api",
+        "q": "Design the HTTP endpoints.",
+        "qvi": "Thiết kế HTTP endpoint.",
+        "en": "POST /urls validates and creates a mapping; GET /{code} redirects an active mapping with Location. PATCH /urls/{id} updates owned mutable links if supported. Define 404/410 behavior, cache headers and abuse checks.",
+        "vi": "POST /urls xác thực và tạo mapping; GET /{code} redirect mapping hợp lệ với Location. PATCH /urls/{id} sửa link sở hữu nếu hỗ trợ. Định nghĩa 404/410, cache header và kiểm tra abuse.",
+        "notes": "POST /urls; GET /{code}; PATCH /urls/{id}."
+      },
+      {
+        "stage": "hld",
+        "q": "Describe the high-level design.",
+        "qvi": "Mô tả thiết kế tổng thể.",
+        "en": "The edge/API looks up the short code in cache, falls back to indexed authoritative storage on a miss, then returns a redirect. Click analytics are asynchronous and must not dominate redirect latency. Writes enforce uniqueness and invalidate mutable mappings.",
+        "vi": "Edge/API tìm short code trong cache, khi miss truy vấn storage chuẩn có index rồi trả redirect. Analytics bất đồng bộ không nên chi phối latency. Ghi bảo đảm uniqueness và invalidate mapping có thể sửa.",
+        "notes": "Browser → CDN/API → Cache or DB; async Analytics Queue."
+      },
+      {
+        "stage": "deepdive",
+        "q": "How do you generate unique short codes?",
+        "qvi": "Sinh mã ngắn duy nhất thế nào?",
+        "en": "Generate random codes with sufficient entropy and enforce uniqueness at the database; retry collisions with a bounded policy. A counter-based scheme can avoid random collisions but requires allocation and may expose predictable codes.",
+        "vi": "Sinh code ngẫu nhiên đủ entropy và bảo đảm unique tại DB; retry collision có giới hạn. Counter tránh collision ngẫu nhiên nhưng cần cấp phát và có thể lộ code dễ đoán.",
+        "notes": "Entropy + unique constraint; compare counters."
+      },
+      {
+        "stage": "failure",
+        "q": "What happens when Redis fails?",
+        "qvi": "Redis lỗi thì sao?",
+        "en": "Separate normal misses from widespread cache failures. Coalesce identical lookups, limit database concurrency and use TTL jitter on refill. Shed overload rather than allowing unbounded waits, and restore cache gradually.",
+        "vi": "Phân biệt miss thường với lỗi cache diện rộng. Gom lookup giống nhau, giới hạn concurrency DB và TTL jitter khi refill. Từ chối tải dư thay vì chờ vô hạn, phục hồi cache dần.",
+        "notes": "Cache failure → bounded DB fallback → load shedding."
+      },
+      {
+        "stage": "tradeoffs",
+        "q": "Why choose 302 over 301?",
+        "qvi": "Tại sao chọn 302 thay 301?",
+        "en": "302 fits mutable links when clients should recheck destinations, while 301 can be cached more aggressively. The exact behavior depends on cache headers and clients. I would choose based on mutability, analytics and invalidation requirements.",
+        "vi": "302 phù hợp link sửa được khi client cần kiểm tra lại đích, còn 301 có thể cache mạnh hơn. Hành vi phụ thuộc header và client. Chọn theo khả năng sửa, analytics và invalidation.",
+        "notes": "Mutability and control vs cache efficiency."
+      }
+    ]
+  }
+}
