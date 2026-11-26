@@ -16,25 +16,37 @@
       0,
       1,
       "Send client message ID",
-      "Gửi message ID từ client"
+      "Gửi message ID từ client",
+      "The sender transmits a client-generated message ID over an authenticated WebSocket connection. The gateway checks conversation membership and payload limits.",
+      "Người gửi truyền message ID do client tạo qua WebSocket đã xác thực. Gateway kiểm tra thành viên hội thoại và giới hạn payload.",
+      "message_id · conversation_id"
     ],
     [
       1,
       2,
       "Persist and assign sequence",
-      "Lưu và cấp sequence"
+      "Lưu và cấp sequence",
+      "Persist the message and assign an ordering sequence scoped to its conversation. Deduplicate repeated client IDs; acknowledge only after the required durable commit.",
+      "Lưu tin nhắn và cấp sequence trong phạm vi hội thoại. Loại trùng client ID; chỉ ack sau commit bền vững theo yêu cầu.",
+      "UNIQUE(conversation_id, client_message_id)"
     ],
     [
       2,
       3,
       "Publish committed message via outbox",
-      "Phát sự kiện đã commit qua outbox"
+      "Phát sự kiện đã commit qua outbox",
+      "A relay publishes the committed message via an outbox. The bus may deliver more than once; use message ID and sequence rather than assuming global order.",
+      "Relay phát tin đã commit qua outbox. Bus có thể gửi nhiều lần; dùng message ID và sequence thay vì giả định thứ tự toàn cục.",
+      "Outbox → event bus"
     ],
     [
       3,
       4,
       "Route to connected recipient",
-      "Định tuyến đến người nhận"
+      "Định tuyến đến người nhận",
+      "A delivery consumer routes the event to the gateway holding the recipient connection (the gateway is abstracted here). The recipient deduplicates and acknowledges as required.",
+      "Consumer định tuyến event đến gateway giữ kết nối người nhận (gateway được giản lược trong hình). Người nhận loại trùng và ack theo yêu cầu.",
+      "Recipient receives sequence N"
     ]
   ],
   "failure": [
@@ -42,25 +54,37 @@
       3,
       4,
       "Recipient disconnected",
-      "Người nhận mất kết nối"
+      "Người nhận mất kết nối",
+      "The recipient is offline when the delivery event arrives. Live delivery fails, but the message remains in durable storage.",
+      "Người nhận offline khi event đến. Gửi live thất bại nhưng tin nhắn vẫn nằm trong kho bền vững.",
+      "Last seen sequence < latest"
     ],
     [
       4,
       1,
       "Reconnect with last seen cursor",
-      "Kết nối lại với cursor cuối"
+      "Kết nối lại với cursor cuối",
+      "After reconnecting and authenticating, the recipient supplies its last durable cursor. Establish a subscription/replay boundary so newly arriving events are not lost.",
+      "Sau reconnect và xác thực, người nhận gửi cursor cuối đã lưu. Thiết lập ranh giới subscription/replay để không mất event mới.",
+      "Reconnect(lastSeenSequence)"
     ],
     [
       1,
       2,
       "Read missing sequence range",
-      "Đọc khoảng sequence bị thiếu"
+      "Đọc khoảng sequence bị thiếu",
+      "The gateway reads authorized messages after the cursor up to a known high-water mark. Fetch results in bounded pages.",
+      "Gateway đọc tin được phép sau cursor đến mốc high-water đã biết. Đọc theo trang có giới hạn.",
+      "WHERE sequence > cursor"
     ],
     [
       1,
       4,
       "Replay and deduplicate by ID",
-      "Phát lại và loại trùng theo ID"
+      "Phát lại và loại trùng theo ID",
+      "Replay history, merge buffered live events by sequence and deduplicate by message ID. Detect gaps and update the durable cursor only after successful processing.",
+      "Replay lịch sử, hợp nhất event live đã buffer theo sequence và loại trùng ID. Phát hiện gap, chỉ cập nhật cursor bền vững sau xử lý thành công.",
+      "Merge history + live · dedup"
     ]
   ],
   "qa": [
@@ -89,5 +113,15 @@
       "Global ordering imposes coordination and throughput cost without helping independent conversations. I would guarantee only the ordering required by the product.",
       "Thứ tự toàn cục tạo chi phí phối hợp và giảm throughput mà không giúp các hội thoại độc lập. Tôi chỉ bảo đảm thứ tự theo yêu cầu sản phẩm."
     ]
-  ]
+  ],
+  "workflowNarration": {
+    "normal": [
+      "I separate durable message acceptance from online delivery. Messages are persisted first, then delivered asynchronously, with ordering scoped to each conversation.",
+      "Tôi tách tiếp nhận tin bền vững khỏi phân phối online. Lưu tin trước rồi gửi bất đồng bộ, với thứ tự theo từng hội thoại."
+    ],
+    "failure": [
+      "When a recipient reconnects, I replay from its last cursor and merge live events carefully. Message IDs prevent duplicates, and sequence gaps trigger catch-up.",
+      "Khi người nhận reconnect, tôi replay từ cursor cuối và hợp nhất event live cẩn thận. Message ID chống trùng, còn gap sequence kích hoạt tải bù."
+    ]
+  }
 }
