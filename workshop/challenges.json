@@ -299,6 +299,122 @@
       ],
       "hint": "Use an outbox, stable delivery IDs, bounded retry and receiver deduplication. Queue alone cannot guarantee exactly-once external effects.",
       "hintVi": "Dùng outbox, delivery ID ổn định, retry giới hạn và dedup bên nhận. Queue không bảo đảm exactly-once side effect ngoài."
+    },
+    {
+      "id": "rag",
+      "title": "Enterprise RAG",
+      "vi": "RAG doanh nghiệp",
+      "level": "GenAI",
+      "scenario": "Design a tenant-aware retrieval-augmented generation service with an asynchronous ingestion path.",
+      "scenarioVi": "Thiết kế dịch vụ RAG theo tenant và luồng ingestion bất đồng bộ.",
+      "fr": [
+        "Ingest and embed documents",
+        "Retrieve tenant-authorized passages",
+        "Generate answers with evidence"
+      ],
+      "nfr": [
+        "Enforce tenant isolation",
+        "Track retrieval and generation latency separately",
+        "Handle stale or failed embeddings"
+      ],
+      "rules": [
+        [
+          "Client reaches application",
+          "client",
+          "app"
+        ],
+        [
+          "Application reaches retriever",
+          "app",
+          "retriever"
+        ],
+        [
+          "Retriever queries vector index",
+          "retriever",
+          "vector"
+        ],
+        [
+          "Application reaches generation service",
+          "app",
+          "llm"
+        ],
+        [
+          "Worker calls embedding service",
+          "worker",
+          "embed"
+        ],
+        [
+          "Worker writes vector index",
+          "worker",
+          "vector"
+        ],
+        [
+          "Application reaches policy guard",
+          "app",
+          "guard"
+        ]
+      ],
+      "resilience": [],
+      "hint": "Authorize retrieval before returning chunks; version embeddings and indexes, separate ingestion from serving, treat retrieved text as untrusted and evaluate citation support.",
+      "hintVi": "Phân quyền retrieval trước khi trả chunk; version embedding/index, tách ingestion khỏi serving, coi text truy xuất là dữ liệu không tin cậy và đánh giá căn cứ citation."
+    },
+    {
+      "id": "agent",
+      "title": "Durable AI Agent",
+      "vi": "AI agent có khả năng phục hồi",
+      "level": "GenAI",
+      "scenario": "Design a tool-using assistant with durable run state, approvals and controlled retries.",
+      "scenarioVi": "Thiết kế assistant gọi tool, lưu run state bền vững, phê duyệt và retry kiểm soát.",
+      "fr": [
+        "Accept and resume runs",
+        "Call model and authorized tools",
+        "Record tool outcomes and run state"
+      ],
+      "nfr": [
+        "Bound tool calls and execution time",
+        "Prevent duplicate external side effects",
+        "Isolate untrusted model and tool outputs"
+      ],
+      "rules": [
+        [
+          "Client reaches orchestrator",
+          "client",
+          "app"
+        ],
+        [
+          "Orchestrator reaches run-state store",
+          "app",
+          "memory"
+        ],
+        [
+          "Orchestrator calls model",
+          "app",
+          "llm"
+        ],
+        [
+          "Orchestrator reaches policy guard",
+          "app",
+          "guard"
+        ],
+        [
+          "Guard reaches tool gateway",
+          "guard",
+          "tools"
+        ],
+        [
+          "Orchestrator enqueues work",
+          "app",
+          "queue"
+        ],
+        [
+          "Queue reaches worker",
+          "queue",
+          "worker"
+        ]
+      ],
+      "resilience": [],
+      "hint": "Persist state before external actions, enforce explicit authorization at tool boundary and reconcile ambiguous side effects. A stored transcript alone is not a reliable execution checkpoint.",
+      "hintVi": "Lưu state trước tác động ngoài, thực thi authorization tại tool boundary và đối soát kết quả chưa rõ. Chỉ lưu transcript không đủ làm checkpoint thực thi."
     }
   ],
   "palette": [
@@ -378,6 +494,55 @@
       "cloud",
       3000,
       20
+    ],
+    [
+      "embed",
+      "Embedding service",
+      "worker",
+      1500,
+      30
+    ],
+    [
+      "vector",
+      "Vector index",
+      "db",
+      4000,
+      12
+    ],
+    [
+      "llm",
+      "LLM inference",
+      "cloud",
+      200,
+      500
+    ],
+    [
+      "retriever",
+      "Retriever",
+      "server",
+      5000,
+      5
+    ],
+    [
+      "guard",
+      "Policy guard",
+      "shield",
+      10000,
+      2
+    ],
+    [
+      "tools",
+      "Tool gateway",
+      "gate",
+      3000,
+      10
+    ],
+    [
+      "memory",
+      "Run-state store",
+      "db",
+      2500,
+      8
     ]
   ],
   "notice": "All capacity and latency values are illustrative teaching assumptions, not measured production benchmarks."
