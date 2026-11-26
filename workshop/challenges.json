@@ -1,0 +1,384 @@
+{
+  "challenges": [
+    {
+      "id": "url-shortener",
+      "title": "URL Shortener",
+      "vi": "Rút gọn URL",
+      "level": "Foundation",
+      "scenario": "Design a service that creates short links and redirects users at high read volume.",
+      "scenarioVi": "Thiết kế dịch vụ tạo link ngắn và redirect với lượng đọc lớn.",
+      "fr": [
+        "Create a unique short code",
+        "Redirect active links",
+        "Track clicks asynchronously"
+      ],
+      "nfr": [
+        "100 million redirects/day",
+        "Low redirect latency",
+        "Bounded staleness for disabled links"
+      ],
+      "rules": [
+        [
+          "Client reaches application",
+          "client",
+          "app"
+        ],
+        [
+          "Application reaches authoritative storage",
+          "app",
+          "db"
+        ],
+        [
+          "Application reaches cache",
+          "app",
+          "cache"
+        ],
+        [
+          "Application publishes analytics",
+          "app",
+          "queue"
+        ],
+        [
+          "Queue reaches worker",
+          "queue",
+          "worker"
+        ]
+      ],
+      "resilience": [
+        "lb",
+        "replica"
+      ],
+      "hint": "Start with Client → App → DB. Add cache to absorb reads and a queue for analytics. A replica is not a substitute for an authoritative unique constraint.",
+      "hintVi": "Bắt đầu Client → App → DB. Thêm cache để giảm tải đọc và queue cho analytics. Replica không thay thế unique constraint ở nguồn chuẩn."
+    },
+    {
+      "id": "rate-limiter",
+      "title": "Distributed Rate Limiter",
+      "vi": "Giới hạn lưu lượng phân tán",
+      "level": "Intermediate",
+      "scenario": "Protect a multi-instance API with shared user and tenant quotas.",
+      "scenarioVi": "Bảo vệ API nhiều instance bằng quota user và tenant chung.",
+      "fr": [
+        "Authenticate caller and resolve policy",
+        "Atomically allow or deny",
+        "Forward only accepted requests"
+      ],
+      "nfr": [
+        "100,000 requests/s offered load",
+        "Bounded limiter overhead",
+        "Explicit fail-open/closed policy"
+      ],
+      "rules": [
+        [
+          "Client reaches gateway",
+          "client",
+          "gateway"
+        ],
+        [
+          "Gateway checks limiter",
+          "gateway",
+          "limiter"
+        ],
+        [
+          "Limiter reaches shared state",
+          "limiter",
+          "cache"
+        ],
+        [
+          "Gateway reaches backend",
+          "gateway",
+          "app"
+        ]
+      ],
+      "resilience": [
+        "lb",
+        "replica"
+      ],
+      "hint": "Model the decision path separately from the allowed request path. Redis atomicity on one primary does not guarantee global precision during failover.",
+      "hintVi": "Tách đường quyết định khỏi đường request được phép. Atomic Redis trên một primary không đảm bảo chính xác toàn cục khi failover."
+    },
+    {
+      "id": "payment",
+      "title": "Payment Gateway",
+      "vi": "Cổng thanh toán",
+      "level": "Advanced",
+      "scenario": "Design idempotent payments and recovery from ambiguous provider responses.",
+      "scenarioVi": "Thiết kế thanh toán idempotent và phục hồi kết quả provider chưa rõ.",
+      "fr": [
+        "Create and query a payment",
+        "Call external provider",
+        "Reconcile pending payments"
+      ],
+      "nfr": [
+        "No duplicate logical charges",
+        "Durable confirmed state",
+        "Provider timeout may leave PENDING"
+      ],
+      "rules": [
+        [
+          "Client reaches payment API",
+          "client",
+          "app"
+        ],
+        [
+          "API persists payment state",
+          "app",
+          "db"
+        ],
+        [
+          "API calls provider",
+          "app",
+          "external"
+        ],
+        [
+          "Worker reads pending payments",
+          "worker",
+          "db"
+        ],
+        [
+          "Worker queries provider",
+          "worker",
+          "external"
+        ]
+      ],
+      "resilience": [
+        "lb",
+        "replica"
+      ],
+      "hint": "Persist pending state before external calls. Use stable provider keys and conditional terminal transitions; never hold DB locks across network calls.",
+      "hintVi": "Lưu pending trước gọi ngoài. Dùng key provider ổn định và chuyển trạng thái cuối có điều kiện; không giữ lock DB xuyên network."
+    },
+    {
+      "id": "flash-sale",
+      "title": "Flash Sale Inventory",
+      "vi": "Giữ hàng flash sale",
+      "level": "Advanced",
+      "scenario": "Reserve scarce stock safely under concentrated demand.",
+      "scenarioVi": "Giữ hàng khan hiếm an toàn khi nhu cầu tập trung.",
+      "fr": [
+        "Reserve stock",
+        "Confirm payment",
+        "Expire unpaid reservations"
+      ],
+      "nfr": [
+        "No overselling",
+        "100,000 offered requests/s",
+        "Bounded concurrency on hot SKU"
+      ],
+      "rules": [
+        [
+          "Buyer reaches admission gateway",
+          "client",
+          "gateway"
+        ],
+        [
+          "Gateway reaches inventory service",
+          "gateway",
+          "app"
+        ],
+        [
+          "Service reaches transactional store",
+          "app",
+          "db"
+        ],
+        [
+          "Payment confirmation reaches service",
+          "external",
+          "app"
+        ],
+        [
+          "Expiry worker reaches store",
+          "worker",
+          "db"
+        ]
+      ],
+      "resilience": [
+        "lb",
+        "replica"
+      ],
+      "hint": "Use conditional stock decrement and reservation insert in one transaction. Payment and expiry compete via conditional transitions.",
+      "hintVi": "Giảm tồn kho có điều kiện và tạo reservation trong một transaction. Payment và expiry cạnh tranh bằng chuyển trạng thái có điều kiện."
+    },
+    {
+      "id": "chat",
+      "title": "Real-time Chat",
+      "vi": "Nhắn tin thời gian thực",
+      "level": "Advanced",
+      "scenario": "Deliver durable messages online and recover offline history.",
+      "scenarioVi": "Gửi tin nhắn bền vững online và phục hồi lịch sử offline.",
+      "fr": [
+        "Send messages",
+        "Deliver live messages",
+        "Replay history on reconnect"
+      ],
+      "nfr": [
+        "Per-conversation order",
+        "Durable acceptance",
+        "Asynchronous fan-out"
+      ],
+      "rules": [
+        [
+          "Sender reaches gateway",
+          "client",
+          "gateway"
+        ],
+        [
+          "Gateway reaches message store",
+          "gateway",
+          "db"
+        ],
+        [
+          "Store publishes events",
+          "db",
+          "queue"
+        ],
+        [
+          "Queue reaches delivery worker",
+          "queue",
+          "worker"
+        ],
+        [
+          "Worker reaches gateway",
+          "worker",
+          "gateway"
+        ]
+      ],
+      "resilience": [
+        "lb",
+        "replica"
+      ],
+      "hint": "Persist first, acknowledge after commit, publish through outbox, replay by cursor on reconnect.",
+      "hintVi": "Lưu trước, ack sau commit, phát event qua outbox, replay theo cursor khi reconnect."
+    },
+    {
+      "id": "webhook",
+      "title": "Webhook Delivery",
+      "vi": "Phân phối webhook",
+      "level": "Advanced",
+      "scenario": "Deliver signed events to unreliable customer endpoints.",
+      "scenarioVi": "Gửi event có chữ ký tới endpoint khách hàng không ổn định.",
+      "fr": [
+        "Persist business event",
+        "Deliver signed HTTP request",
+        "Retry and expose delivery status"
+      ],
+      "nfr": [
+        "At-least-once delivery",
+        "Tenant isolation",
+        "Bounded retries"
+      ],
+      "rules": [
+        [
+          "Producer reaches event API",
+          "client",
+          "app"
+        ],
+        [
+          "API persists event",
+          "app",
+          "db"
+        ],
+        [
+          "Store publishes task",
+          "db",
+          "queue"
+        ],
+        [
+          "Queue reaches delivery worker",
+          "queue",
+          "worker"
+        ],
+        [
+          "Worker calls customer endpoint",
+          "worker",
+          "external"
+        ]
+      ],
+      "resilience": [
+        "replica"
+      ],
+      "hint": "Use an outbox, stable delivery IDs, bounded retry and receiver deduplication. Queue alone cannot guarantee exactly-once external effects.",
+      "hintVi": "Dùng outbox, delivery ID ổn định, retry giới hạn và dedup bên nhận. Queue không bảo đảm exactly-once side effect ngoài."
+    }
+  ],
+  "palette": [
+    [
+      "client",
+      "Client",
+      "user",
+      0,
+      0
+    ],
+    [
+      "lb",
+      "Load balancer",
+      "split",
+      25000,
+      1
+    ],
+    [
+      "gateway",
+      "API gateway",
+      "gate",
+      12000,
+      2
+    ],
+    [
+      "app",
+      "Application",
+      "server",
+      6000,
+      4
+    ],
+    [
+      "limiter",
+      "Rate limiter",
+      "shield",
+      16000,
+      2
+    ],
+    [
+      "db",
+      "Primary database",
+      "db",
+      2500,
+      8
+    ],
+    [
+      "replica",
+      "Read replica",
+      "db",
+      2500,
+      7
+    ],
+    [
+      "cache",
+      "Cache / Redis",
+      "cache",
+      18000,
+      1
+    ],
+    [
+      "queue",
+      "Message queue",
+      "queue",
+      14000,
+      3
+    ],
+    [
+      "worker",
+      "Worker",
+      "worker",
+      4000,
+      5
+    ],
+    [
+      "external",
+      "External provider",
+      "cloud",
+      3000,
+      20
+    ]
+  ],
+  "notice": "All capacity and latency values are illustrative teaching assumptions, not measured production benchmarks."
+}
