@@ -1,0 +1,3 @@
+import {useStudy} from './store';
+export function Pair({en,vi}:{en:string;vi:string}){const lang=useStudy(s=>s.lang);return <div className={'pair '+(lang==='both'?'both':'single')}>{lang!=='vi'&&<section lang="en"><span className="eyebrow">ENGLISH</span><p>{en}</p></section>}{lang!=='en'&&<section lang="vi"><span className="eyebrow">TIẾNG VIỆT</span><p>{vi}</p></section>}</div>}
+export function QA({q,qvi,en,vi,open=false}:{q:string;qvi?:string;en:string;vi:string;open?:boolean}){return <details open={open||undefined} className="qa"><summary>{q}</summary>{qvi&&<p className="muted">{qvi}</p>}<Pair en={en} vi={vi}/></details>}
