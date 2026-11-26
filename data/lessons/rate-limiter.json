@@ -16,31 +16,46 @@
       0,
       1,
       "API request",
-      "Request API"
+      "Request API",
+      "The client sends an authenticated API request. The gateway identifies the caller and route rather than trusting arbitrary user-supplied quota keys.",
+      "Client gửi request API đã xác thực. Gateway xác định caller và route, không tin quota key tùy ý do người dùng gửi.",
+      "Principal · route"
     ],
     [
       1,
       2,
       "Check tenant/user policy",
-      "Kiểm tra policy tenant/user"
+      "Kiểm tra policy tenant/user",
+      "The gateway passes the verified identity and applicable quota policy to the limiter. Tenant and user limits may both apply.",
+      "Gateway chuyển danh tính đã xác minh và policy quota vào limiter. Có thể áp dụng cả giới hạn tenant lẫn user.",
+      "Quota key · capacity · refill rate"
     ],
     [
       2,
       3,
       "Atomic token bucket update",
-      "Cập nhật token bucket atomically"
+      "Cập nhật token bucket atomically",
+      "An atomic Redis operation refills tokens based on elapsed time, caps them at bucket capacity and consumes a token only if available. Related policy keys need an atomicity strategy.",
+      "Thao tác Redis atomic refill token theo thời gian, giới hạn capacity và chỉ trừ token khi đủ. Các key policy liên quan cần chiến lược atomicity.",
+      "tokens = min(capacity, tokens + elapsed × rate)"
     ],
     [
       3,
       2,
       "Return allow / deny",
-      "Trả allow / deny"
+      "Trả allow / deny",
+      "The limiter receives the decision and remaining quota. The gateway returns HTTP 429 with retry information for denied requests; only allowed requests continue.",
+      "Limiter nhận quyết định và quota còn lại. Gateway trả HTTP 429 kèm thông tin retry nếu bị từ chối; chỉ request được phép đi tiếp.",
+      "ALLOW / DENY · 429"
     ],
     [
       1,
       4,
       "Forward allowed request",
-      "Chuyển request được phép"
+      "Chuyển request được phép",
+      "The gateway forwards an allowed request to the backend; backend concurrency limits still protect resources against downstream saturation.",
+      "Gateway chuyển request được phép vào backend; giới hạn concurrency backend vẫn bảo vệ tài nguyên khỏi bão hòa downstream.",
+      "Allowed request → backend"
     ]
   ],
   "failure": [
@@ -48,19 +63,28 @@
       2,
       3,
       "Limiter store unavailable",
-      "Kho limiter không khả dụng"
+      "Kho limiter không khả dụng",
+      "Redis becomes unreachable or exceeds a strict deadline. The limiter cannot safely assume the global quota state is current.",
+      "Redis không truy cập được hoặc vượt deadline. Limiter không thể giả định quota toàn cục vẫn chính xác.",
+      "Store timeout · unknown quota"
     ],
     [
       2,
       1,
       "Apply endpoint-specific fallback",
-      "Áp dụng fallback theo endpoint"
+      "Áp dụng fallback theo endpoint",
+      "Apply a predefined fallback by route risk: fail closed for sensitive mutations, or use a bounded local allowance for lower-risk reads. Report degraded behavior.",
+      "Áp dụng fallback theo rủi ro route: fail closed cho ghi nhạy cảm, hoặc quota local giới hạn với đọc ít rủi ro. Ghi nhận chế độ degraded.",
+      "Policy: fail closed / local budget"
     ],
     [
       1,
       4,
       "Local bounded allowance for low-risk API",
-      "Giới hạn local cho API ít rủi ro"
+      "Giới hạn local cho API ít rủi ro",
+      "In the low-risk branch only, forward requests within the local budget. Aggregate allowances can exceed a global quota, so size them conservatively and restore normal control when healthy.",
+      "Chỉ trong nhánh ít rủi ro, chuyển request còn quota local. Tổng quota local có thể vượt quota toàn cục nên phải đặt thận trọng và phục hồi kiểm soát khi khỏe.",
+      "Bounded degradation · not strict global quota"
     ]
   ],
   "qa": [
@@ -89,5 +113,15 @@
       "Fixed windows are simple but allow bursts across boundaries. Sliding windows improve precision at storage or compute cost; token bucket offers a useful burst-control compromise.",
       "Fixed window đơn giản nhưng có burst ở ranh giới. Sliding window chính xác hơn đổi lấy chi phí lưu trữ/tính toán; token bucket cân bằng burst và hiệu năng."
     ]
-  ]
+  ],
+  "workflowNarration": {
+    "normal": [
+      "I use a token bucket because it permits controlled bursts. The atomic update is essential: concurrent requests must not consume the same token.",
+      "Tôi dùng token bucket vì cho phép burst có kiểm soát. Update atomic rất quan trọng: request đồng thời không được tiêu cùng token."
+    ],
+    "failure": [
+      "When the quota store fails, I choose degradation by endpoint risk. I cannot claim a local fallback preserves strict global limits, so I cap exposure and monitor recovery.",
+      "Khi kho quota lỗi, tôi chọn chế độ degraded theo rủi ro endpoint. Không thể khẳng định fallback local giữ giới hạn toàn cục nghiêm ngặt, nên tôi giới hạn rủi ro và theo dõi phục hồi."
+    ]
+  }
 }
