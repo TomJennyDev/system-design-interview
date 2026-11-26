@@ -14,7 +14,8 @@
     "followAnswer": "I would defer optional analytics until the core transaction is reliable.",
     "followVi": "Tôi hoãn analytics tùy chọn cho đến khi giao dịch chính đáng tin cậy.",
     "mistake": "Jumping into technology before confirming requirements.",
-    "level": "Senior: prioritize requirements. Staff: align stakeholders and identify conflicting objectives."
+    "level": "Senior: prioritize requirements. Staff: align stakeholders and identify conflicting objectives.",
+    "exampleVi": "Tôi sẽ hoãn analytics tùy chọn cho đến khi giao dịch chính đáng tin cậy."
   },
   {
     "category": "Capacity",
@@ -31,7 +32,8 @@
     "followAnswer": "I would size that tenant's hot path independently and enforce per-tenant limits.",
     "followVi": "Tính tải riêng của tenant đó và áp dụng giới hạn theo tenant.",
     "mistake": "Confusing average traffic with peak capacity.",
-    "level": "Senior: derive estimates. Staff: quantify uncertainty, capacity cost and headroom."
+    "level": "Senior: derive estimates. Staff: quantify uncertainty, capacity cost and headroom.",
+    "exampleVi": "Giả sử một triệu người dùng gửi 20 request/ngày, QPS trung bình khoảng 231; đỉnh giả định gấp 5 là 1.157."
   },
   {
     "category": "API design",
@@ -48,7 +50,8 @@
     "followAnswer": "I would reject conflicting reuse and bind the key to a canonical request hash.",
     "followVi": "Từ chối tái sử dụng khác nội dung và gắn key với hash request chuẩn hóa.",
     "mistake": "Ignoring error and retry contracts.",
-    "level": "Senior: clear contract. Staff: compatibility, versioning and ownership."
+    "level": "Senior: clear contract. Staff: compatibility, versioning and ownership.",
+    "exampleVi": "POST /orders nhận idempotency key, trả order ID; GET /orders/{id} trả trạng thái."
   },
   {
     "category": "Data model",
@@ -65,7 +68,8 @@
     "followAnswer": "Use a stable cursor over timestamp and unique ID; define snapshot semantics if required.",
     "followVi": "Dùng cursor ổn định theo timestamp và ID; xác định snapshot nếu cần.",
     "mistake": "Designing tables without query patterns.",
-    "level": "Senior: access patterns and constraints. Staff: schema evolution and data lifecycle."
+    "level": "Senior: access patterns and constraints. Staff: schema evolution and data lifecycle.",
+    "exampleVi": "Với lịch sử đơn hàng, tạo index (customer_id, created_at, id) và bảo đảm order ID duy nhất."
   },
   {
     "category": "Architecture",
@@ -82,7 +86,8 @@
     "followAnswer": "A consumer might observe an order that never commits. An outbox removes that dual-write gap.",
     "followVi": "Consumer có thể thấy order chưa commit; outbox loại bỏ khoảng trống dual-write.",
     "mistake": "Listing components without explaining data flow.",
-    "level": "Senior: end-to-end flow. Staff: boundaries, ownership and evolution."
+    "level": "Senior: end-to-end flow. Staff: boundaries, ownership and evolution.",
+    "exampleVi": "Order API commit đơn hàng và outbox cùng nhau, sau đó worker phát sự kiện."
   },
   {
     "category": "Trade-offs",
@@ -99,7 +104,8 @@
     "followAnswer": "When measured contention or throughput exceeds the tested capacity and partitioning preserves the invariant.",
     "followVi": "Khi contention hoặc throughput vượt khả năng đã kiểm thử và partition vẫn bảo toàn bất biến.",
     "mistake": "Claiming one technology is universally better.",
-    "level": "Senior: compare options. Staff: account for migration, team skills and total cost."
+    "level": "Senior: compare options. Staff: account for migration, team skills and total cost.",
+    "exampleVi": "Tôi ưu tiên PostgreSQL để bảo toàn ràng buộc tồn kho bằng transaction; distributed KV có thể hữu ích khi các partition độc lập chiếm ưu thế."
   },
   {
     "category": "Concurrency",
@@ -116,7 +122,8 @@
     "followAnswer": "Use a unique reservation ID and return the previously committed result for equivalent requests.",
     "followVi": "Dùng reservation ID duy nhất và trả kết quả đã commit cho request tương đương.",
     "mistake": "Assuming a queue alone prevents races.",
-    "level": "Senior: atomicity and tests. Staff: cross-service invariants and ownership."
+    "level": "Senior: atomicity and tests. Staff: cross-service invariants and ownership.",
+    "exampleVi": "Chỉ giảm tồn kho khi available >= quantity và tạo reservation trong cùng transaction."
   },
   {
     "category": "Consistency",
@@ -133,7 +140,8 @@
     "followAnswer": "Route that read to the primary or use a version/session token when read-your-writes is required.",
     "followVi": "Đọc từ primary hoặc dùng version/session token nếu cần read-your-writes.",
     "mistake": "Applying strong consistency to everything without justification.",
-    "level": "Senior: consistency per operation. Staff: cross-region business trade-offs."
+    "level": "Senior: consistency per operation. Staff: cross-region business trade-offs.",
+    "exampleVi": "Giữ hàng dùng ghi transaction tại nguồn chuẩn; hiển thị tồn kho có thể hơi cũ."
   },
   {
     "category": "Failures",
@@ -150,7 +158,8 @@
     "followAnswer": "Use bounded retries, jitter, deadlines, backpressure and circuit breaking where appropriate.",
     "followVi": "Retry có giới hạn, jitter, deadline, backpressure và circuit breaker khi phù hợp.",
     "mistake": "Treating timeout as proof of failure.",
-    "level": "Senior: recovery mechanics. Staff: failure domains and operational policy."
+    "level": "Senior: recovery mechanics. Staff: failure domains and operational policy.",
+    "exampleVi": "Với thanh toán, giữ pending và truy vấn provider bằng mã thanh toán ổn định."
   },
   {
     "category": "Scalability",
@@ -167,7 +176,8 @@
     "followAnswer": "If the shared write boundary is saturated, extra application servers may amplify contention.",
     "followVi": "Nếu điểm ghi chung bão hòa, tăng server ứng dụng có thể làm contention nặng hơn.",
     "mistake": "Scaling without identifying the limiting resource.",
-    "level": "Senior: identify saturation. Staff: cost and capacity planning."
+    "level": "Senior: identify saturation. Staff: cost and capacity planning.",
+    "exampleVi": "Với SKU nóng, đo row-lock wait và tốc độ giữ hàng thành công trước khi thêm admission control."
   },
   {
     "category": "Messaging",
@@ -184,7 +194,8 @@
     "followAnswer": "Not with broker semantics alone. External effects require provider idempotency or reconciliation.",
     "followVi": "Không chỉ bằng broker; tác động ngoài cần provider idempotency hoặc đối soát.",
     "mistake": "Confusing broker guarantees with end-to-end exactly-once.",
-    "level": "Senior: delivery and deduplication. Staff: replay, governance and event contracts."
+    "level": "Senior: delivery and deduplication. Staff: replay, governance and event contracts.",
+    "exampleVi": "Lưu event ID đã xử lý trong cùng transaction với cập nhật DB của consumer."
   },
   {
     "category": "Observability",
@@ -201,7 +212,8 @@
     "followAnswer": "Inspect queue delay, connection-pool waits, lock waits and dependency spans.",
     "followVi": "Kiểm tra queue delay, connection pool, lock waits và dependency spans.",
     "mistake": "Only monitoring CPU and memory.",
-    "level": "Senior: diagnose from evidence. Staff: error budgets and incident ownership."
+    "level": "Senior: diagnose from evidence. Staff: error budgets and incident ownership.",
+    "exampleVi": "Đo tỷ lệ thanh toán hoàn tất và thời gian pending cùng latency, error rate của provider."
   },
   {
     "category": "Security",
@@ -218,7 +230,8 @@
     "followAnswer": "Define revocation latency, invalidate by version, and fail closed for sensitive operations when freshness is uncertain.",
     "followVi": "Xác định độ trễ thu hồi, invalidate theo version và fail closed với thao tác nhạy cảm.",
     "mistake": "Trusting client-provided tenant IDs.",
-    "level": "Senior: enforce controls. Staff: threat model, compliance and governance."
+    "level": "Senior: enforce controls. Staff: threat model, compliance and governance.",
+    "exampleVi": "Mỗi truy vấn dữ liệu tenant phải có tenant context đã xác minh; kiểm thử truy cập chéo tenant."
   },
   {
     "category": "Migration",
@@ -235,7 +248,8 @@
     "followAnswer": "Stop rollout, switch reads back while preserving compatible writes, then reconcile discrepancies.",
     "followVi": "Dừng rollout, chuyển read về cũ trong khi giữ write tương thích và đối soát sai lệch.",
     "mistake": "Removing old schema before rollback is safe.",
-    "level": "Senior: safe sequence. Staff: multi-team rollout, rollback criteria and deadlines."
+    "level": "Senior: safe sequence. Staff: multi-team rollout, rollback criteria and deadlines.",
+    "exampleVi": "Thêm cột nullable, triển khai code tương thích, backfill, xác minh rồi áp dụng constraint an toàn."
   },
   {
     "category": "Reliability",
@@ -252,7 +266,8 @@
     "followAnswer": "No. Unreplicated acknowledged writes can be lost during failover; the business must accept that risk or choose stronger guarantees.",
     "followVi": "Không. Ghi đã ack nhưng chưa replicate có thể mất khi failover; cần chấp nhận rủi ro hoặc chọn cam kết mạnh hơn.",
     "mistake": "Equating backups with high availability.",
-    "level": "Senior: failure recovery. Staff: business continuity and regional cost."
+    "level": "Senior: failure recovery. Staff: business continuity and regional cost.",
+    "exampleVi": "Với ledger, dùng commit được replicate bền vững theo mô hình lỗi yêu cầu và kiểm thử restore."
   },
   {
     "category": "Cost",
@@ -269,6 +284,7 @@
     "followAnswer": "Revisit non-critical retention and redundancy assumptions with stakeholders; preserve correctness and agreed critical SLOs.",
     "followVi": "Xem lại retention và redundancy không trọng yếu với stakeholder; giữ tính đúng và SLO quan trọng.",
     "mistake": "Reducing redundancy blindly.",
-    "level": "Senior: resource trade-offs. Staff: unit economics and business priorities."
+    "level": "Senior: resource trade-offs. Staff: unit economics and business priorities.",
+    "exampleVi": "Với redirect thiên về đọc, cache mapping bất biến phổ biến và kiểm soát retention analytics."
   }
 ]
