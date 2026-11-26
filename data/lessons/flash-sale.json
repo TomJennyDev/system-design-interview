@@ -16,25 +16,37 @@
       0,
       1,
       "Request reservation",
-      "Yêu cầu giữ hàng"
+      "Yêu cầu giữ hàng",
+      "The buyer sends SKU, quantity and a stable reservation ID. Admission control rejects excessive traffic before it reaches the hot inventory row.",
+      "Người mua gửi SKU, số lượng và reservation ID ổn định. Admission control loại tải quá mức trước khi đến dòng tồn kho nóng.",
+      "POST /reservations · quantity"
     ],
     [
       1,
       2,
       "Atomic stock decrement + reservation",
-      "Giảm tồn kho và tạo reservation atomically"
+      "Giảm tồn kho và tạo reservation atomically",
+      "In one transaction, decrement available stock only if enough units remain, and insert a PENDING reservation with an expiry time. Roll back both changes on failure.",
+      "Trong cùng transaction, chỉ giảm tồn kho nếu còn đủ hàng và tạo reservation PENDING có hạn. Nếu lỗi thì rollback cả hai.",
+      "UPDATE ... WHERE available >= quantity"
     ],
     [
       0,
       3,
       "Pay before expiry",
-      "Thanh toán trước hạn"
+      "Thanh toán trước hạn",
+      "The buyer pays using the reservation reference. The payment provider must not be called while holding an inventory row lock.",
+      "Người mua thanh toán theo reference giữ hàng. Không gọi provider trong khi giữ row lock tồn kho.",
+      "Payment reference · reservation_id"
     ],
     [
       3,
       2,
       "Confirm pending reservation",
-      "Xác nhận reservation đang pending"
+      "Xác nhận reservation đang pending",
+      "A verified payment callback conditionally transitions the reservation from PENDING to CONFIRMED according to the expiry policy. Stock is not decremented again.",
+      "Callback thanh toán đã xác minh chuyển có điều kiện PENDING sang CONFIRMED theo chính sách hết hạn. Không giảm tồn kho lần hai.",
+      "PENDING → CONFIRMED"
     ]
   ],
   "failure": [
@@ -42,25 +54,37 @@
       4,
       2,
       "Try pending → expired",
-      "Worker thử chuyển sang expired"
+      "Worker thử chuyển sang expired",
+      "The expiry worker finds an overdue PENDING reservation and attempts an atomic transition to EXPIRED, releasing stock only if its update wins.",
+      "Worker tìm reservation PENDING quá hạn và thử chuyển atomic sang EXPIRED; chỉ trả tồn kho nếu update thắng.",
+      "Conditional transition + stock release"
     ],
     [
       3,
       2,
       "Concurrent payment confirmation",
-      "Callback thanh toán đồng thời"
+      "Callback thanh toán đồng thời",
+      "At almost the same time, a verified payment callback attempts to confirm the same reservation. Both operations contend on the same authoritative state.",
+      "Gần như đồng thời, callback thanh toán đã xác minh thử confirm cùng reservation. Cả hai tranh chấp trên cùng trạng thái chuẩn.",
+      "Concurrent PENDING → CONFIRMED"
     ],
     [
       2,
       4,
       "Only one conditional transition wins",
-      "Chỉ một chuyển trạng thái có điều kiện thắng"
+      "Chỉ một chuyển trạng thái có điều kiện thắng",
+      "The database serializes conflicting updates; only one eligible transition wins. If confirmation wins, the expiry worker releases nothing. If expiry wins, stock is released once.",
+      "DB tuần tự hóa update xung đột; chỉ một chuyển trạng thái hợp lệ thắng. Confirm thắng thì không trả hàng; expiry thắng thì trả hàng đúng một lần.",
+      "Affected rows = 1 or 0"
     ],
     [
       2,
       3,
       "Late payment needs compensation",
-      "Thanh toán muộn cần hoàn tiền/đối soát"
+      "Thanh toán muộn cần hoàn tiền/đối soát",
+      "In the illustrated expiry-wins branch, a late successful payment must be reconciled or refunded according to policy. Do not confirm an already expired reservation blindly.",
+      "Trong nhánh minh họa expiry thắng, thanh toán thành công muộn phải được đối soát hoặc hoàn tiền theo chính sách. Không confirm mù quáng reservation đã hết hạn.",
+      "EXPIRED + paid → compensation"
     ]
   ],
   "qa": [
@@ -89,5 +113,15 @@
       "Redis can accelerate admission, but I would define a durable authoritative inventory and recovery plan. A cache failover or lost write must not create additional sellable stock.",
       "Redis có thể hỗ trợ admission, nhưng cần nguồn tồn kho bền vững và kế hoạch phục hồi. Failover hoặc mất ghi cache không được tạo thêm hàng có thể bán."
     ]
-  ]
+  ],
+  "workflowNarration": {
+    "normal": [
+      "The invariant is that available stock cannot become negative. I enforce it with a conditional update and reservation insert in one transaction, rather than relying on a cache or queue alone.",
+      "Bất biến là tồn kho khả dụng không âm. Tôi bảo đảm bằng update có điều kiện và insert reservation trong một transaction, thay vì chỉ dựa vào cache hoặc queue."
+    ],
+    "failure": [
+      "Expiration and payment confirmation compete for the same state transition. Only the winner can change inventory; a late payment needs compensation, not another decrement.",
+      "Hết hạn và xác nhận thanh toán cạnh tranh trên cùng chuyển trạng thái. Chỉ bên thắng được tác động tồn kho; thanh toán muộn cần bù trừ, không giảm hàng lần nữa."
+    ]
+  }
 }
