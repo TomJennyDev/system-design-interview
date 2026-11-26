@@ -16,31 +16,46 @@
       0,
       1,
       "GET short code",
-      "GET mã ngắn"
+      "GET mã ngắn",
+      "The browser requests a short code. The edge or API validates its format and checks whether an edge-cached redirect can be served under the product policy.",
+      "Browser yêu cầu mã ngắn. Edge hoặc API kiểm tra định dạng và xem có thể trả redirect từ edge cache theo chính sách sản phẩm không.",
+      "GET /abc123"
     ],
     [
       1,
       2,
       "Look up mapping",
-      "Tìm mapping"
+      "Tìm mapping",
+      "On an edge miss, the redirect API looks up the code in the shared cache. Cache keys include relevant namespace and version if mappings are mutable.",
+      "Khi edge miss, API tìm mã trong cache dùng chung. Cache key gồm namespace và version phù hợp nếu mapping thay đổi được.",
+      "Cache GET url:abc123"
     ],
     [
       2,
       1,
       "Cache hit returns destination",
-      "Cache hit trả đích"
+      "Cache hit trả đích",
+      "For a hit, obtain the destination, status and expiry metadata; reject disabled or expired mappings. Avoid using stale data beyond the agreed policy.",
+      "Khi hit, lấy URL đích, trạng thái và metadata hết hạn; từ chối mapping bị vô hiệu hoặc hết hạn. Không dùng dữ liệu cũ quá chính sách.",
+      "Cache hit · active mapping"
     ],
     [
       1,
       0,
       "302 redirect",
-      "Chuyển hướng 302"
+      "Chuyển hướng 302",
+      "Return a redirect with the destination in the Location header. Use 302 for the illustrated mutable-link policy, with explicit cache headers.",
+      "Trả redirect với URL đích trong header Location. Dùng 302 cho chính sách link có thể sửa trong ví dụ, kèm cache header rõ ràng.",
+      "HTTP 302 · Location"
     ],
     [
       1,
       4,
       "Emit analytics asynchronously",
-      "Gửi analytics bất đồng bộ"
+      "Gửi analytics bất đồng bộ",
+      "Publish analytics asynchronously, ideally through a bounded nonblocking path. Analytics failure should not block redirects unless the product requires durable tracking.",
+      "Phát analytics bất đồng bộ qua đường dẫn có giới hạn, không blocking. Lỗi analytics không nên chặn redirect trừ khi sản phẩm yêu cầu tracking bền vững.",
+      "Click event · async"
     ]
   ],
   "failure": [
@@ -48,25 +63,37 @@
       1,
       2,
       "Cache miss or unavailable",
-      "Cache miss hoặc lỗi"
+      "Cache miss hoặc lỗi",
+      "The cache returns a miss or times out. Distinguish a normal miss from widespread failure because database protection differs.",
+      "Cache trả miss hoặc timeout. Phân biệt miss thông thường với lỗi diện rộng vì cơ chế bảo vệ DB khác nhau.",
+      "MISS / cache timeout"
     ],
     [
       1,
       3,
       "Read authoritative mapping",
-      "Đọc mapping gốc"
+      "Đọc mapping gốc",
+      "Coalesce concurrent lookups for the same key and enforce database concurrency limits before querying the authoritative mapping by indexed short code.",
+      "Gom các lookup đồng thời cùng key và giới hạn concurrency DB trước khi truy vấn mapping chuẩn bằng short code có index.",
+      "Single-flight · indexed lookup"
     ],
     [
       3,
       1,
       "Return URL under bounded load",
-      "Trả URL với tải được giới hạn"
+      "Trả URL với tải được giới hạn",
+      "If storage returns an active mapping, refill cache when healthy using TTL jitter. Return not-found or expired responses where applicable; do not cache errors as valid URLs.",
+      "Nếu storage trả mapping hoạt động, refill cache khi khỏe với TTL jitter. Trả not-found hoặc hết hạn khi phù hợp; không cache lỗi như URL hợp lệ.",
+      "Cache refill · TTL jitter"
     ],
     [
       1,
       0,
       "Redirect or shed overload",
-      "Redirect hoặc từ chối khi quá tải"
+      "Redirect hoặc từ chối khi quá tải",
+      "Return the redirect if the mapping is valid. If database capacity is exhausted, shed excess load with an appropriate error instead of creating an unbounded queue.",
+      "Trả redirect nếu mapping hợp lệ. Nếu DB hết công suất, từ chối tải dư bằng lỗi phù hợp thay vì tạo queue vô hạn.",
+      "302 or 503 under overload"
     ]
   ],
   "qa": [
@@ -95,5 +122,15 @@
       "A 302 offers more control over mutable destinations and measurement, while a 301 may be cached more aggressively. I would choose based on product semantics and explicit cache headers.",
       "302 cho phép kiểm soát đích thay đổi và đo lường tốt hơn; 301 có thể bị cache mạnh hơn. Tôi chọn theo ngữ nghĩa sản phẩm và cache header rõ ràng."
     ]
-  ]
+  ],
+  "workflowNarration": {
+    "normal": [
+      "For this read-heavy system, I keep the redirect path short. The cache serves active mappings, the database is authoritative, and analytics is decoupled from redirect latency.",
+      "Với hệ thống thiên về đọc, tôi giữ đường redirect ngắn. Cache phục vụ mapping hợp lệ, DB là nguồn chuẩn và analytics tách khỏi latency redirect."
+    ],
+    "failure": [
+      "When the cache fails, the database can become the bottleneck. I use request coalescing and bounded concurrency, then shed overload if necessary. I would validate limits through load tests.",
+      "Khi cache lỗi, DB có thể thành bottleneck. Tôi gom request, giới hạn concurrency rồi từ chối tải nếu cần. Tôi xác minh giới hạn bằng load test."
+    ]
+  }
 }
