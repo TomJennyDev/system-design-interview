@@ -1,0 +1,470 @@
+{
+  "payment": {
+    "scope": [
+      [
+        "Which payment operations should we support?",
+        "Chúng ta hỗ trợ thao tác thanh toán nào?",
+        "Create a payment, retrieve status, and issue refunds. Card processing is outsourced.",
+        "Tạo thanh toán, xem trạng thái, hoàn tiền. Xử lý thẻ thuê bên ngoài."
+      ],
+      [
+        "Are settlement and disputes in scope?",
+        "Quyết toán và tranh chấp có nằm trong phạm vi?",
+        "Not in this round. Focus on payment correctness.",
+        "Không. Tập trung tính đúng đắn thanh toán."
+      ],
+      [
+        "Is duplicate charging ever acceptable?",
+        "Trừ tiền trùng có thể chấp nhận không?",
+        "No. Pending outcomes are acceptable while we investigate.",
+        "Không. Có thể giữ pending khi đang xác minh."
+      ],
+      [
+        "What scale and availability should I design for?",
+        "Thiết kế cho tải và availability nào?",
+        "Assume 2,000 peak attempts per second and 99.95% API availability.",
+        "Giả định 2.000 attempt/s đỉnh và API availability 99,95%."
+      ]
+    ],
+    "decisions": [
+      [
+        "FR: Create and query a payment",
+        "Tạo và xem trạng thái thanh toán",
+        "Client → Payment API → Payment DB",
+        "Persist a pending payment and return a stable identifier. An authorized status query reads that record.",
+        "Lưu payment pending và trả ID ổn định. Truy vấn trạng thái có phân quyền đọc bản ghi đó."
+      ],
+      [
+        "FR: Execute payment externally",
+        "Thực hiện thanh toán bên ngoài",
+        "Payment API → Provider",
+        "Call the provider outside the DB transaction. Record its confirmed outcome. Refunds are a separate idempotent operation.",
+        "Gọi provider ngoài transaction DB. Lưu kết quả xác nhận. Hoàn tiền là thao tác idempotent riêng."
+      ],
+      [
+        "NFR: No duplicate logical charge",
+        "Không trừ tiền logic trùng",
+        "Payment API + DB unique constraint + Provider key",
+        "Bind the merchant key to a request hash and use a stable provider key. Local uniqueness alone does not protect the external side effect.",
+        "Gắn key merchant với hash request và dùng key provider ổn định. Unique local không tự bảo vệ tác động ngoài."
+      ],
+      [
+        "NFR: Recover ambiguous results",
+        "Phục hồi kết quả chưa rõ",
+        "Reconciler → Provider → Payment DB",
+        "Scan old pending attempts, verify provider outcomes, conditionally persist terminal state and emit downstream events via outbox.",
+        "Quét pending cũ, xác minh provider, lưu trạng thái cuối có điều kiện và phát event downstream qua outbox."
+      ]
+    ],
+    "probes": [
+      [
+        "Why not hold a database lock while calling the provider?",
+        "Tại sao không giữ lock DB khi gọi provider?",
+        "It would keep a transaction open across unpredictable network latency, consuming connections and increasing contention. I would commit PENDING first, call externally, then reconcile the outcome in a second transaction.",
+        "Transaction mở xuyên qua network latency khó đoán, chiếm connection và tăng contention. Tôi commit PENDING trước, gọi bên ngoài, rồi đối soát trong transaction thứ hai."
+      ],
+      [
+        "What if the provider's idempotency key expires?",
+        "Nếu key idempotency provider hết hạn thì sao?",
+        "I would check the provider's retention contract. After the deduplication window, query the original payment reference or escalate ambiguous cases instead of retrying the charge blindly.",
+        "Tôi kiểm tra thời hạn lưu key của provider. Sau cửa sổ dedup, truy vấn reference gốc hoặc chuyển xử lý nếu chưa rõ, không retry trừ tiền mù quáng."
+      ],
+      [
+        "Which metric would reveal a hidden payment incident?",
+        "Metric nào phát hiện sự cố thanh toán tiềm ẩn?",
+        "Track the age distribution of pending payments, reconciliation lag, provider error rates and duplicate-charge reports. A healthy HTTP success rate alone can hide stuck payments.",
+        "Theo dõi phân bố tuổi pending, lag đối soát, lỗi provider và báo cáo trừ tiền trùng. HTTP success khỏe vẫn có thể che giấu giao dịch bị kẹt."
+      ]
+    ]
+  },
+  "flash-sale": {
+    "scope": [
+      [
+        "Are reservations global or per warehouse?",
+        "Giữ hàng toàn cục hay theo kho?",
+        "Assume one inventory pool for each SKU.",
+        "Giả định một kho logic cho mỗi SKU."
+      ],
+      [
+        "How long do reservations last?",
+        "Thời hạn giữ hàng bao lâu?",
+        "Ten minutes; users can pay during that window.",
+        "10 phút; người dùng thanh toán trong khoảng đó."
+      ],
+      [
+        "Can we oversell or reject requests?",
+        "Có thể bán vượt hoặc từ chối request không?",
+        "Never oversell. Reject excess attempts under load.",
+        "Không bán vượt. Có thể từ chối attempt quá tải."
+      ],
+      [
+        "What is the peak load and distribution?",
+        "Tải đỉnh và phân bố thế nào?",
+        "100,000 requests/s, with one highly popular SKU.",
+        "100.000 request/s, một SKU rất nóng."
+      ]
+    ],
+    "decisions": [
+      [
+        "FR: Reserve stock",
+        "Giữ tồn kho",
+        "Buyer → Admission API → Inventory DB",
+        "Create a pending reservation and decrement available stock in a single conditional transaction.",
+        "Tạo reservation pending và giảm tồn kho khả dụng trong transaction có điều kiện."
+      ],
+      [
+        "FR: Confirm or expire",
+        "Xác nhận hoặc hết hạn",
+        "Payment / Expiry Worker → Inventory DB",
+        "Confirm or expire pending reservations conditionally. Release units only if expiry wins.",
+        "Confirm hoặc expire pending có điều kiện. Chỉ trả hàng nếu expiry thắng."
+      ],
+      [
+        "NFR: No oversell",
+        "Không bán vượt",
+        "Inventory DB: conditional write",
+        "Enforce available >= quantity at the authoritative boundary. Do not depend on eventual cache state.",
+        "Bảo toàn available >= quantity tại nguồn chuẩn, không phụ thuộc cache eventual."
+      ],
+      [
+        "NFR: Survive hot-key bursts",
+        "Chịu burst key nóng",
+        "Admission API: bounded concurrency",
+        "Protect the hot row through per-SKU admission limits, measured contention and load shedding.",
+        "Bảo vệ dòng nóng bằng giới hạn admission theo SKU, đo contention và load shedding."
+      ]
+    ],
+    "probes": [
+      [
+        "Why doesn't Kafka alone prevent overselling?",
+        "Tại sao chỉ Kafka không chống bán vượt?",
+        "Ordering within a partition helps serialize requests, but replay and multiple write paths still exist. The authoritative stock update must enforce the invariant, with idempotent reservation keys.",
+        "Thứ tự trong partition giúp tuần tự request nhưng vẫn có replay và nhiều đường ghi. Update tồn kho nguồn chuẩn phải bảo toàn bất biến, kèm key idempotent."
+      ],
+      [
+        "How could we split one hot SKU across shards?",
+        "Chia một SKU nóng qua nhiều shard thế nào?",
+        "Allocate explicit stock quotas to shards so their sum never exceeds global stock. Rebalancing must be coordinated and recoverable; otherwise use a single authoritative counter and reject excess load.",
+        "Cấp quota tồn kho rõ ràng cho shard sao cho tổng không vượt tồn kho toàn cục. Rebalance cần phối hợp và phục hồi được; nếu không dùng counter chuẩn và từ chối tải dư."
+      ],
+      [
+        "What if payment arrives after expiry?",
+        "Thanh toán đến sau hết hạn thì sao?",
+        "If expiry already released the stock, do not simply confirm. Reconcile the payment and refund or re-reserve only under an explicit business policy.",
+        "Nếu expiry đã trả hàng thì không confirm đơn giản. Đối soát và hoàn tiền hoặc giữ lại hàng chỉ theo chính sách rõ ràng."
+      ]
+    ]
+  },
+  "chat": {
+    "scope": [
+      [
+        "Do we need groups, offline history and receipts?",
+        "Có cần nhóm, lịch sử offline và receipt?",
+        "One-to-one and group text messages, offline history; receipts are optional.",
+        "Chat cá nhân và nhóm văn bản, lịch sử offline; receipt tùy chọn."
+      ],
+      [
+        "Is media in scope?",
+        "Media có nằm trong phạm vi?",
+        "No, focus on text and reconnect.",
+        "Không, tập trung text và reconnect."
+      ],
+      [
+        "Do messages require global ordering?",
+        "Tin nhắn cần thứ tự toàn cục không?",
+        "Only within a conversation. Acknowledged messages must be durable.",
+        "Chỉ trong hội thoại. Tin đã ack phải bền vững."
+      ],
+      [
+        "What traffic should we assume?",
+        "Giả định tải nào?",
+        "10 million DAU; estimate connections and fan-out separately.",
+        "10 triệu DAU; tính kết nối và fan-out riêng."
+      ]
+    ],
+    "decisions": [
+      [
+        "FR: Send message",
+        "Gửi tin nhắn",
+        "Sender → WS Gateway → Message Store",
+        "Authenticate membership, deduplicate the client message ID, persist and assign a conversation sequence.",
+        "Xác thực membership, dedup client ID, lưu và cấp sequence hội thoại."
+      ],
+      [
+        "FR: Deliver online",
+        "Gửi online",
+        "Message Store → Event Bus → Recipient gateway",
+        "Publish committed events asynchronously and route to the current recipient connection.",
+        "Phát event đã commit bất đồng bộ và định tuyến đến kết nối người nhận."
+      ],
+      [
+        "NFR: Durable per-conversation order",
+        "Bền vững, thứ tự theo hội thoại",
+        "Store: partition + sequence + outbox",
+        "Separate authoritative ordered persistence from parallel delivery. Acknowledge only after durable commit.",
+        "Tách lưu có thứ tự khỏi delivery song song. Chỉ ack sau commit bền vững."
+      ],
+      [
+        "NFR: Recover disconnected clients",
+        "Phục hồi client mất kết nối",
+        "Recipient → Gateway → Message Store",
+        "Use cursor-based history, a live subscription boundary and deduplication to catch up safely.",
+        "Dùng lịch sử theo cursor, ranh giới subscription live và dedup để tải bù an toàn."
+      ]
+    ],
+    "probes": [
+      [
+        "What if one conversation becomes extremely large?",
+        "Nếu một hội thoại rất lớn thì sao?",
+        "Keep ordering at the write boundary, then parallelize fan-out. Monitor hot partitions and batch delivery; apply backpressure to slow clients instead of blocking durable acceptance.",
+        "Giữ thứ tự tại nơi ghi, song song hóa fan-out. Đo hot partition, gửi batch; backpressure client chậm thay vì chặn ghi bền vững."
+      ],
+      [
+        "How do you prevent a gap between history and live subscription?",
+        "Chống gap giữa lịch sử và live subscription thế nào?",
+        "Establish a replay high-water mark and buffer live events while reading history. Merge by sequence and deduplicate; detect missing sequences before advancing the cursor.",
+        "Thiết lập high-water mark replay và buffer event live trong lúc đọc lịch sử. Hợp nhất theo sequence, dedup và phát hiện gap trước cập nhật cursor."
+      ],
+      [
+        "Why not use WebSockets without storage?",
+        "Tại sao không chỉ WebSocket?",
+        "A socket only transports data while connected. Durable storage is necessary for acknowledged messages, offline history and reconnect recovery.",
+        "Socket chỉ truyền dữ liệu khi kết nối. Storage bền vững cần cho tin đã ack, lịch sử offline và phục hồi reconnect."
+      ]
+    ]
+  },
+  "webhook": {
+    "scope": [
+      [
+        "Which subscription and delivery features are required?",
+        "Cần chức năng subscription và delivery nào?",
+        "Register endpoints, filter events, signed delivery, retry and delivery history.",
+        "Đăng ký endpoint, filter event, gửi có chữ ký, retry và lịch sử."
+      ],
+      [
+        "Do customers require replay?",
+        "Khách hàng có cần replay không?",
+        "Yes, controlled and authorized replay.",
+        "Có, replay kiểm soát và phân quyền."
+      ],
+      [
+        "Can we promise exactly-once delivery?",
+        "Có thể hứa exactly-once delivery không?",
+        "At-least-once is acceptable; duplicates must be documented.",
+        "At-least-once chấp nhận được; phải thông báo khả năng trùng."
+      ],
+      [
+        "What is the peak event rate?",
+        "Tải event đỉnh bao nhiêu?",
+        "50,000 events/s. Endpoints can be slow or unavailable.",
+        "50.000 event/s. Endpoint có thể chậm hoặc lỗi."
+      ]
+    ],
+    "decisions": [
+      [
+        "FR: Register and persist events",
+        "Đăng ký và lưu event",
+        "Producer → Event DB",
+        "Store event and outbox atomically; match subscriptions using authorized tenant scope.",
+        "Lưu event và outbox atomic; tìm subscription theo tenant có quyền."
+      ],
+      [
+        "FR: Send and track deliveries",
+        "Gửi và theo dõi delivery",
+        "Event DB → Queue → Worker → Customer",
+        "Create stable delivery IDs, sign HTTP requests, persist results and acknowledge tasks.",
+        "Tạo delivery ID ổn định, ký HTTP, lưu kết quả rồi ack task."
+      ],
+      [
+        "NFR: Isolate slow tenants",
+        "Cách ly tenant chậm",
+        "Queue + Worker: quotas and deadlines",
+        "Schedule fairly with per-tenant concurrency, network deadlines and bounded in-flight work.",
+        "Lên lịch công bằng với concurrency theo tenant, deadline mạng và giới hạn in-flight."
+      ],
+      [
+        "NFR: Recover failures",
+        "Phục hồi lỗi",
+        "Worker → delayed queue / DLQ",
+        "Retry with the same delivery ID, backoff and jitter. Store terminal failures for controlled replay.",
+        "Retry cùng delivery ID, backoff và jitter. Lưu lỗi cuối để replay kiểm soát."
+      ]
+    ],
+    "probes": [
+      [
+        "What if an endpoint returns HTTP 429?",
+        "Endpoint trả HTTP 429 thì sao?",
+        "Respect a bounded Retry-After policy where appropriate, reduce concurrency for that endpoint and schedule delayed retries within the delivery budget.",
+        "Tuân thủ Retry-After có giới hạn khi phù hợp, giảm concurrency endpoint và lên lịch retry trễ trong ngân sách delivery."
+      ],
+      [
+        "What if a worker sends successfully but crashes before persisting?",
+        "Worker gửi thành công rồi crash trước lưu thì sao?",
+        "Redelivery is possible. Reuse the stable delivery ID and require receiver-side deduplication for business effects. Our queue cannot guarantee exactly-once HTTP side effects.",
+        "Có thể gửi lại. Dùng delivery ID ổn định và cần dedup bên nhận cho tác động nghiệp vụ. Queue không bảo đảm HTTP side effect exactly-once."
+      ],
+      [
+        "How do you protect outbound requests?",
+        "Bảo vệ outbound request thế nào?",
+        "Validate endpoint ownership and address policy, block private and metadata network destinations, revalidate resolution and redirects, and isolate outbound workers.",
+        "Xác minh quyền endpoint và chính sách địa chỉ, chặn mạng private/metadata, kiểm tra lại DNS và redirect, cách ly worker outbound."
+      ]
+    ]
+  },
+  "rate-limiter": {
+    "scope": [
+      [
+        "Which dimensions have quotas?",
+        "Quota áp dụng chiều nào?",
+        "Per authenticated user and per tenant, configurable per API route.",
+        "Theo user xác thực và tenant, cấu hình theo route."
+      ],
+      [
+        "Should short bursts be allowed?",
+        "Có cho burst ngắn không?",
+        "Yes, within an explicit burst budget.",
+        "Có, trong ngân sách burst rõ ràng."
+      ],
+      [
+        "Must the quota be globally exact?",
+        "Quota toàn cục phải chính xác tuyệt đối không?",
+        "Sensitive writes need strict control; low-risk reads can degrade within bounds.",
+        "Ghi nhạy cảm cần nghiêm; đọc ít rủi ro có thể degraded trong giới hạn."
+      ],
+      [
+        "What throughput should we target?",
+        "Throughput mục tiêu?",
+        "100,000 requests/s at peak; minimize added latency.",
+        "100.000 request/s đỉnh; giảm latency bổ sung."
+      ]
+    ],
+    "decisions": [
+      [
+        "FR: Evaluate quota",
+        "Đánh giá quota",
+        "Client → API Gateway → Limiter",
+        "Resolve verified identity, route and quota policy. Return allow or deny.",
+        "Xác định danh tính xác minh, route và policy. Trả allow hoặc deny."
+      ],
+      [
+        "FR: Enforce allowance",
+        "Thực thi quota",
+        "Limiter → Redis → Gateway → Backend",
+        "Refill and consume tokens atomically; denied requests receive 429. Only allowed requests proceed.",
+        "Refill và trừ token atomic; request bị từ chối nhận 429. Chỉ request được phép đi tiếp."
+      ],
+      [
+        "NFR: Prevent concurrent double consumption",
+        "Chống tiêu token đồng thời",
+        "Redis: atomic operation",
+        "Keep refill and decrement in one atomic operation. Define atomicity when multiple quotas apply.",
+        "Giữ refill và decrement trong một thao tác atomic. Xác định atomicity khi nhiều quota áp dụng."
+      ],
+      [
+        "NFR: Degrade safely",
+        "Degrade an toàn",
+        "Gateway: local budget / fail closed",
+        "Apply risk-based fallback with bounded exposure; local budgets are not strict global quotas.",
+        "Fallback theo rủi ro với giới hạn exposure; quota local không phải quota toàn cục nghiêm ngặt."
+      ]
+    ],
+    "probes": [
+      [
+        "What if user and tenant quotas both apply?",
+        "Nếu quota user và tenant cùng áp dụng?",
+        "Check both in one atomic boundary where possible. Across shards, use a conservative reservation approach or tolerate explicit quota approximation; do not silently double-consume.",
+        "Kiểm tra cả hai trong cùng ranh giới atomic khi có thể. Qua shard, dùng reservation thận trọng hoặc chấp nhận xấp xỉ rõ ràng; không tiêu token hai lần âm thầm."
+      ],
+      [
+        "Can a local fallback preserve an exact global limit?",
+        "Fallback local giữ quota toàn cục chính xác không?",
+        "Not without coordinated preallocated budgets. Independent local limits may exceed the global limit, so allocate bounded capacity or fail closed for strict routes.",
+        "Không nếu thiếu ngân sách cấp trước có phối hợp. Limit local độc lập có thể vượt limit toàn cục; cấp capacity giới hạn hoặc fail closed route nghiêm."
+      ],
+      [
+        "Which metrics matter most?",
+        "Metric nào quan trọng nhất?",
+        "Measure limiter p95/p99 overhead, allowed and denied counts, Redis saturation, fallback frequency and policy violations. Distinguish legitimate bursts from abuse.",
+        "Đo overhead p95/p99, số allow/deny, Redis saturation, tần suất fallback và vi phạm policy. Phân biệt burst hợp lệ với abuse."
+      ]
+    ]
+  },
+  "url-shortener": {
+    "scope": [
+      [
+        "Should links support custom aliases and edits?",
+        "Link có hỗ trợ alias và sửa không?",
+        "Creation and redirect are essential; assume links may be disabled or edited.",
+        "Tạo và redirect là chính; giả định link có thể vô hiệu hoặc sửa."
+      ],
+      [
+        "Is click analytics required?",
+        "Có cần analytics lượt click?",
+        "Basic counts are useful but not critical to the redirect path.",
+        "Đếm cơ bản hữu ích nhưng không trọng yếu đường redirect."
+      ],
+      [
+        "How stale may redirects be?",
+        "Redirect được cũ bao lâu?",
+        "Agree on a bounded invalidation delay; abuse blocking is especially important.",
+        "Thống nhất độ trễ invalidation có giới hạn; chặn abuse đặc biệt quan trọng."
+      ],
+      [
+        "What scale do we expect?",
+        "Quy mô dự kiến?",
+        "100 million redirects/day; predominantly reads.",
+        "100 triệu redirect/ngày; chủ yếu đọc."
+      ]
+    ],
+    "decisions": [
+      [
+        "FR: Create unique links",
+        "Tạo link duy nhất",
+        "Client → API → URL DB",
+        "Generate an adequately random code, enforce a unique constraint and retry collisions with a limit.",
+        "Sinh code đủ ngẫu nhiên, unique constraint và retry collision có giới hạn."
+      ],
+      [
+        "FR: Redirect to active mapping",
+        "Redirect mapping hợp lệ",
+        "Browser → CDN/API → URL DB",
+        "Look up the code, validate status and expiry, return Location and a suitable redirect status.",
+        "Tìm code, kiểm tra status/expiry, trả Location và mã redirect phù hợp."
+      ],
+      [
+        "NFR: Low read latency",
+        "Latency đọc thấp",
+        "CDN/API → Cache → URL DB on miss",
+        "Cache popular mappings while honoring invalidation and abuse policy. Measure hit rate and database load.",
+        "Cache mapping phổ biến nhưng tuân thủ invalidation và chặn abuse. Đo hit rate và tải DB."
+      ],
+      [
+        "NFR: Protect critical read path",
+        "Bảo vệ đường đọc chính",
+        "Analytics Queue + bounded DB fallback",
+        "Publish analytics asynchronously. Coalesce cache misses, cap DB concurrency and shed overload.",
+        "Phát analytics bất đồng bộ. Gom cache miss, giới hạn concurrency DB và từ chối tải dư."
+      ]
+    ],
+    "probes": [
+      [
+        "How much code space do six base62 characters provide?",
+        "Sáu ký tự base62 có bao nhiêu mã?",
+        "62^6 is about 56.8 billion possible codes. Random allocation still collides before the space is exhausted; enforce uniqueness and size the code for lifetime writes and abuse risk.",
+        "62^6 khoảng 56,8 tỷ mã. Cấp ngẫu nhiên vẫn trùng trước khi hết không gian; bảo đảm unique và chọn độ dài theo tổng ghi và rủi ro abuse."
+      ],
+      [
+        "What if a viral link expires or is blocked?",
+        "Nếu link viral hết hạn hoặc bị chặn?",
+        "Use versioned invalidation or short bounded TTLs; the authoritative status wins. For urgent abuse controls, maintain a fast deny mechanism consistent with the product's safety requirements.",
+        "Dùng invalidation theo version hoặc TTL ngắn có giới hạn; trạng thái nguồn chuẩn thắng. Chặn abuse khẩn cấp cần cơ chế deny nhanh phù hợp yêu cầu an toàn."
+      ],
+      [
+        "What happens at 0% cache hit rate?",
+        "Nếu hit rate bằng 0% thì sao?",
+        "At the assumed 10x peak, about 11,570 reads/s may reach storage rather than 579 at 95% hits. Use request coalescing, bounded concurrency and tested overload limits rather than assuming the database can absorb it.",
+        "Ở đỉnh giả định 10 lần, khoảng 11.570 read/s tới storage thay vì 579 khi hit 95%. Gom request, giới hạn concurrency và kiểm thử ngưỡng quá tải thay vì giả định DB chịu được."
+      ]
+    ]
+  }
+}
