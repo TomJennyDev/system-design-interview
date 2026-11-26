@@ -1,0 +1,274 @@
+[
+  {
+    "category": "Requirements",
+    "variants": [
+      "What are we building?",
+      "What is in scope?",
+      "Which features matter most?"
+    ],
+    "framework": "Clarify actors → workflows → exclusions → confirm",
+    "template": "Before I propose a design, I would clarify [actors], [core flows] and [constraints].",
+    "templateVi": "Trước khi thiết kế, tôi làm rõ tác nhân, luồng chính và ràng buộc.",
+    "example": "Would real-time updates be mandatory?",
+    "followUp": "Are there any requirements you would deliberately exclude?",
+    "followAnswer": "I would defer optional analytics until the core transaction is reliable.",
+    "followVi": "Tôi hoãn analytics tùy chọn cho đến khi giao dịch chính đáng tin cậy.",
+    "mistake": "Jumping into technology before confirming requirements.",
+    "level": "Senior: prioritize requirements. Staff: align stakeholders and identify conflicting objectives."
+  },
+  {
+    "category": "Capacity",
+    "variants": [
+      "How much traffic do you expect?",
+      "Can you estimate QPS?",
+      "How would you size this?"
+    ],
+    "framework": "State assumptions → calculate average → peak → validate",
+    "template": "Assuming [users] × [actions/day], average QPS is [total]/86,400. I would size for [peak] and measure skew.",
+    "templateVi": "Giả sử số người dùng nhân thao tác/ngày, QPS trung bình bằng tổng chia 86.400; tính tải đỉnh và đo độ lệch.",
+    "example": "Assuming 1 million users send 20 requests/day, average QPS is 231; a hypothetical 5x peak is 1,157.",
+    "followUp": "What if one tenant generates half the traffic?",
+    "followAnswer": "I would size that tenant's hot path independently and enforce per-tenant limits.",
+    "followVi": "Tính tải riêng của tenant đó và áp dụng giới hạn theo tenant.",
+    "mistake": "Confusing average traffic with peak capacity.",
+    "level": "Senior: derive estimates. Staff: quantify uncertainty, capacity cost and headroom."
+  },
+  {
+    "category": "API design",
+    "variants": [
+      "What endpoints would you expose?",
+      "How would clients interact?",
+      "Define the API contract."
+    ],
+    "framework": "Operation → contract → errors → retry semantics",
+    "template": "I would expose [method/path] for [operation], with [validation], [authorization] and [idempotency semantics].",
+    "templateVi": "Tôi cung cấp method/path cho thao tác, kèm validation, phân quyền và ngữ nghĩa idempotency.",
+    "example": "POST /orders accepts an idempotency key, returns the order ID, and GET /orders/{id} returns status.",
+    "followUp": "What happens if the same key is reused with different data?",
+    "followAnswer": "I would reject conflicting reuse and bind the key to a canonical request hash.",
+    "followVi": "Từ chối tái sử dụng khác nội dung và gắn key với hash request chuẩn hóa.",
+    "mistake": "Ignoring error and retry contracts.",
+    "level": "Senior: clear contract. Staff: compatibility, versioning and ownership."
+  },
+  {
+    "category": "Data model",
+    "variants": [
+      "How would you store the data?",
+      "What are the access patterns?",
+      "Which indexes do you need?"
+    ],
+    "framework": "Access patterns → entities → keys → constraints → indexes",
+    "template": "The dominant queries are [queries]. I would design [keys/indexes] around them and enforce [invariant] at write time.",
+    "templateVi": "Thiết kế khóa/index theo truy vấn chủ đạo và bảo toàn bất biến khi ghi.",
+    "example": "For order history, index (customer_id, created_at, id); enforce unique order IDs.",
+    "followUp": "How would you paginate under concurrent inserts?",
+    "followAnswer": "Use a stable cursor over timestamp and unique ID; define snapshot semantics if required.",
+    "followVi": "Dùng cursor ổn định theo timestamp và ID; xác định snapshot nếu cần.",
+    "mistake": "Designing tables without query patterns.",
+    "level": "Senior: access patterns and constraints. Staff: schema evolution and data lifecycle."
+  },
+  {
+    "category": "Architecture",
+    "variants": [
+      "Walk me through your design.",
+      "What happens when a request arrives?",
+      "Can you draw the flow?"
+    ],
+    "framework": "Entry → validation → state → side effects → response",
+    "template": "A request enters [gateway], where [validation] occurs. [Service] persists [state] before [response/event].",
+    "templateVi": "Request vào gateway, được validation, service lưu trạng thái rồi phản hồi hoặc phát event.",
+    "example": "The order API commits the order and outbox event together, then a worker publishes the event.",
+    "followUp": "Why not publish before committing?",
+    "followAnswer": "A consumer might observe an order that never commits. An outbox removes that dual-write gap.",
+    "followVi": "Consumer có thể thấy order chưa commit; outbox loại bỏ khoảng trống dual-write.",
+    "mistake": "Listing components without explaining data flow.",
+    "level": "Senior: end-to-end flow. Staff: boundaries, ownership and evolution."
+  },
+  {
+    "category": "Trade-offs",
+    "variants": [
+      "Why did you choose X?",
+      "Why not Y?",
+      "What alternatives did you consider?"
+    ],
+    "framework": "Requirement → options → decision → downside → revisit trigger",
+    "template": "I chose [X] over [Y] because [requirement]. The downside is [cost], which I mitigate with [control].",
+    "templateVi": "Chọn X thay Y vì yêu cầu; giảm nhược điểm bằng biện pháp kiểm soát.",
+    "example": "I prefer PostgreSQL for transactional inventory constraints; a distributed key-value store may help when independent partitions dominate.",
+    "followUp": "When would you change your choice?",
+    "followAnswer": "When measured contention or throughput exceeds the tested capacity and partitioning preserves the invariant.",
+    "followVi": "Khi contention hoặc throughput vượt khả năng đã kiểm thử và partition vẫn bảo toàn bất biến.",
+    "mistake": "Claiming one technology is universally better.",
+    "level": "Senior: compare options. Staff: account for migration, team skills and total cost."
+  },
+  {
+    "category": "Concurrency",
+    "variants": [
+      "What if two requests arrive together?",
+      "How do you avoid a race?",
+      "How do you enforce correctness?"
+    ],
+    "framework": "Invariant → atomic boundary → conflict handling → test",
+    "template": "I would enforce [invariant] using [conditional update/constraint/transaction] at the authoritative write boundary.",
+    "templateVi": "Bảo toàn bất biến bằng conditional update/constraint/transaction tại nơi ghi chính.",
+    "example": "For inventory, decrement only where available >= quantity and create the reservation in the same transaction.",
+    "followUp": "What if the transaction is retried?",
+    "followAnswer": "Use a unique reservation ID and return the previously committed result for equivalent requests.",
+    "followVi": "Dùng reservation ID duy nhất và trả kết quả đã commit cho request tương đương.",
+    "mistake": "Assuming a queue alone prevents races.",
+    "level": "Senior: atomicity and tests. Staff: cross-service invariants and ownership."
+  },
+  {
+    "category": "Consistency",
+    "variants": [
+      "What consistency do you need?",
+      "Can stale reads be tolerated?",
+      "How do replicas affect correctness?"
+    ],
+    "framework": "Classify operations → guarantee → staleness → enforcement",
+    "template": "For [critical write], I require [guarantee]. For [derived view], eventual consistency is acceptable within [bound].",
+    "templateVi": "Ghi quan trọng cần cam kết cụ thể; view dẫn xuất có thể eventual consistency trong giới hạn.",
+    "example": "Inventory reservation uses authoritative transactional writes; product availability display may be slightly stale.",
+    "followUp": "What if a customer reads immediately after writing?",
+    "followAnswer": "Route that read to the primary or use a version/session token when read-your-writes is required.",
+    "followVi": "Đọc từ primary hoặc dùng version/session token nếu cần read-your-writes.",
+    "mistake": "Applying strong consistency to everything without justification.",
+    "level": "Senior: consistency per operation. Staff: cross-region business trade-offs."
+  },
+  {
+    "category": "Failures",
+    "variants": [
+      "What if X goes down?",
+      "How does the system degrade?",
+      "What if the remote call times out?"
+    ],
+    "framework": "Failure detection → unknown outcome → safe degradation → recovery",
+    "template": "I would treat a timeout as an unknown outcome, preserve [operation ID], and reconcile before unsafe retries.",
+    "templateVi": "Xem timeout là kết quả chưa rõ, giữ ID thao tác và đối soát trước retry không an toàn.",
+    "example": "For payments, retain pending state and query the provider using the stable payment reference.",
+    "followUp": "How do you prevent retry storms?",
+    "followAnswer": "Use bounded retries, jitter, deadlines, backpressure and circuit breaking where appropriate.",
+    "followVi": "Retry có giới hạn, jitter, deadline, backpressure và circuit breaker khi phù hợp.",
+    "mistake": "Treating timeout as proof of failure.",
+    "level": "Senior: recovery mechanics. Staff: failure domains and operational policy."
+  },
+  {
+    "category": "Scalability",
+    "variants": [
+      "Where is the bottleneck?",
+      "How do you scale to 10x?",
+      "What about hot keys?"
+    ],
+    "framework": "Hypothesis → measurement → mitigation → verify",
+    "template": "My hypothesis is [resource] because [workload]. I would measure [metric] before choosing [optimization].",
+    "templateVi": "Giả thuyết tài nguyên X vì workload; đo metric trước khi tối ưu.",
+    "example": "For a hot SKU, measure row-lock waits and accepted reservation rate before adding admission control.",
+    "followUp": "Why not just add more servers?",
+    "followAnswer": "If the shared write boundary is saturated, extra application servers may amplify contention.",
+    "followVi": "Nếu điểm ghi chung bão hòa, tăng server ứng dụng có thể làm contention nặng hơn.",
+    "mistake": "Scaling without identifying the limiting resource.",
+    "level": "Senior: identify saturation. Staff: cost and capacity planning."
+  },
+  {
+    "category": "Messaging",
+    "variants": [
+      "How do you guarantee delivery?",
+      "What about duplicate messages?",
+      "How do you preserve order?"
+    ],
+    "framework": "Delivery contract → deduplication → ordering scope → recovery",
+    "template": "I assume at-least-once delivery and make the consumer idempotent using [stable ID] and [atomic local effect].",
+    "templateVi": "Giả định at-least-once và làm consumer idempotent bằng ID ổn định và local effect atomic.",
+    "example": "Store processed event IDs in the same transaction as the consumer's database update.",
+    "followUp": "Can you guarantee exactly-once external payment?",
+    "followAnswer": "Not with broker semantics alone. External effects require provider idempotency or reconciliation.",
+    "followVi": "Không chỉ bằng broker; tác động ngoài cần provider idempotency hoặc đối soát.",
+    "mistake": "Confusing broker guarantees with end-to-end exactly-once.",
+    "level": "Senior: delivery and deduplication. Staff: replay, governance and event contracts."
+  },
+  {
+    "category": "Observability",
+    "variants": [
+      "How would you monitor it?",
+      "Which SLO matters?",
+      "How would you debug an outage?"
+    ],
+    "framework": "User symptom → SLI/SLO → telemetry → hypothesis → mitigation",
+    "template": "I would define [user-facing SLI], set [SLO], and correlate metrics, logs and traces to locate [failure].",
+    "templateVi": "Xác định SLI hướng người dùng, SLO và tương quan metrics/logs/traces để tìm lỗi.",
+    "example": "Measure successful payment completion and pending age alongside provider latency and error rate.",
+    "followUp": "What if CPU is normal but latency increases?",
+    "followAnswer": "Inspect queue delay, connection-pool waits, lock waits and dependency spans.",
+    "followVi": "Kiểm tra queue delay, connection pool, lock waits và dependency spans.",
+    "mistake": "Only monitoring CPU and memory.",
+    "level": "Senior: diagnose from evidence. Staff: error budgets and incident ownership."
+  },
+  {
+    "category": "Security",
+    "variants": [
+      "How do you secure this system?",
+      "How do you isolate tenants?",
+      "What about abuse?"
+    ],
+    "framework": "Threat → control → enforcement boundary → audit",
+    "template": "I would authenticate callers and enforce [resource authorization] at [service boundary], not only at the gateway.",
+    "templateVi": "Xác thực caller và phân quyền tài nguyên tại service, không chỉ gateway.",
+    "example": "Every tenant-owned query includes a verified tenant context; test cross-tenant access attempts.",
+    "followUp": "How do you handle revoked permissions in cache?",
+    "followAnswer": "Define revocation latency, invalidate by version, and fail closed for sensitive operations when freshness is uncertain.",
+    "followVi": "Xác định độ trễ thu hồi, invalidate theo version và fail closed với thao tác nhạy cảm.",
+    "mistake": "Trusting client-provided tenant IDs.",
+    "level": "Senior: enforce controls. Staff: threat model, compliance and governance."
+  },
+  {
+    "category": "Migration",
+    "variants": [
+      "How would you migrate without downtime?",
+      "How do you roll back?",
+      "How would you evolve this design?"
+    ],
+    "framework": "Compatibility → expand → backfill → verify → switch → contract",
+    "template": "I would use expand-and-contract, backfill in bounded batches, validate parity and switch traffic gradually.",
+    "templateVi": "Dùng expand-and-contract, backfill theo lô, kiểm tra parity và chuyển traffic dần.",
+    "example": "Add a nullable column, deploy compatible code, backfill, validate, then enforce constraints safely.",
+    "followUp": "What if the new read path is incorrect?",
+    "followAnswer": "Stop rollout, switch reads back while preserving compatible writes, then reconcile discrepancies.",
+    "followVi": "Dừng rollout, chuyển read về cũ trong khi giữ write tương thích và đối soát sai lệch.",
+    "mistake": "Removing old schema before rollback is safe.",
+    "level": "Senior: safe sequence. Staff: multi-team rollout, rollback criteria and deadlines."
+  },
+  {
+    "category": "Reliability",
+    "variants": [
+      "What are your RPO and RTO?",
+      "How do you handle regional failure?",
+      "Is this highly available?"
+    ],
+    "framework": "Business impact → objectives → redundancy → failover → drill",
+    "template": "I would agree on RPO and RTO before choosing replication and failover; I would test recovery against both.",
+    "templateVi": "Thống nhất RPO/RTO trước khi chọn replication/failover và kiểm thử theo hai mục tiêu.",
+    "example": "For a ledger, use durable replicated commits within the required failure model and test restoration.",
+    "followUp": "Can asynchronous replication guarantee zero data loss?",
+    "followAnswer": "No. Unreplicated acknowledged writes can be lost during failover; the business must accept that risk or choose stronger guarantees.",
+    "followVi": "Không. Ghi đã ack nhưng chưa replicate có thể mất khi failover; cần chấp nhận rủi ro hoặc chọn cam kết mạnh hơn.",
+    "mistake": "Equating backups with high availability.",
+    "level": "Senior: failure recovery. Staff: business continuity and regional cost."
+  },
+  {
+    "category": "Cost",
+    "variants": [
+      "How much would this cost?",
+      "Can we reduce cost by half?",
+      "Is this overengineered?"
+    ],
+    "framework": "Cost drivers → baseline → alternatives → guardrails",
+    "template": "I would estimate [compute/storage/network] costs, identify the largest driver and optimize without violating [SLO].",
+    "templateVi": "Ước lượng compute/storage/network, tìm chi phí lớn nhất và tối ưu không vi phạm SLO.",
+    "example": "For read-heavy redirects, cache hot immutable mappings and control analytics retention.",
+    "followUp": "What if the budget is cut by 50%?",
+    "followAnswer": "Revisit non-critical retention and redundancy assumptions with stakeholders; preserve correctness and agreed critical SLOs.",
+    "followVi": "Xem lại retention và redundancy không trọng yếu với stakeholder; giữ tính đúng và SLO quan trọng.",
+    "mistake": "Reducing redundancy blindly.",
+    "level": "Senior: resource trade-offs. Staff: unit economics and business priorities."
+  }
+]
