@@ -1,0 +1,32 @@
+name: V9 quality gate
+on:
+  pull_request:
+    paths: ['v9/**', 'data/**', '.github/workflows/v9-quality.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: v9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npm test
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v9-preview
+          path: v9/dist
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: v9-test-results
+          path: v9/test-results

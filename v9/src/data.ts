@@ -1,0 +1,20 @@
+import {z} from 'zod';
+import rawCatalog from '../../data/catalog.json';
+import rawFlow from '../../data/interview-flow.json';
+import rawDialogues from '../../data/interview-dialogues.json';
+import rawPatterns from '../../data/patterns.json';
+import advancedRaw from '../../data/advanced/rate-limiter.json';
+const str=z.string().min(1);
+const step=z.tuple([z.number().int().min(0),z.number().int().min(0),str,str,str,str,str]);
+const lessonSchema=z.object({id:str,title:str,vi:str,prompt:str,scale:str,nodes:z.array(str).min(2),normal:z.array(step).min(1),failure:z.array(step).min(1),qa:z.array(z.tuple([str,str,str])),workflowNarration:z.object({normal:z.tuple([str,str]),failure:z.tuple([str,str])})}).superRefine((l,ctx)=>{for(const s of [...l.normal,...l.failure])if(s[0]>=l.nodes.length||s[1]>=l.nodes.length||s[0]===s[1])ctx.addIssue({code:z.ZodIssueCode.custom,message:'Invalid node index'})});
+const stageSchema=z.object({id:str,en:str,vi:str,minutes:z.number().positive()});
+const question=z.object({stage:str,q:str,qvi:str,en:str,vi:str,notes:str});
+const dialogue=z.object({scope:z.array(z.tuple([str,str,str,str])),decisions:z.array(z.tuple([str,str,str,str,str])),probes:z.array(z.tuple([str,str,str,str]))});
+export const catalog=z.array(z.object({id:str,title:str,vi:str})).parse(rawCatalog);
+export const flow=z.object({stages:z.array(stageSchema),cases:z.record(z.array(question))}).parse(rawFlow);
+export const dialogues=z.record(dialogue).parse(rawDialogues);
+export const patterns=z.array(z.object({category:str,variants:z.array(str),framework:str,template:str,templateVi:str,example:str,exampleVi:str,followUp:str,followAnswer:str,followVi:str,mistake:str,level:str})).parse(rawPatterns);
+export const advanced=z.object({stages:z.array(z.object({title:str,vi:str,qa:z.array(z.tuple([str,str,str,str]))})),algorithms:z.array(z.tuple([str,str,str,str,str])),failures:z.array(z.tuple([str,str,str,str])),sources:z.array(z.tuple([str,z.string().url()]))}).parse(advancedRaw);
+const modules=import.meta.glob('../../data/lessons/*.json',{import:'default'});
+export async function getLesson(id:string){const loader=modules['../../data/lessons/'+id+'.json'];if(!loader)throw Error('Unknown lesson');const l=lessonSchema.parse(await loader());if(l.id!==id||!flow.cases[id]||flow.cases[id].map(q=>q.stage).join()!==flow.stages.map(s=>s.id).join()||!dialogues[id])throw Error('Incomplete lesson '+id);return l}
+export type Lesson=z.infer<typeof lessonSchema>;export type Step=z.infer<typeof step>;

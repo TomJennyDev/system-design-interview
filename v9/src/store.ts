@@ -1,0 +1,3 @@
+import {create} from 'zustand';import {persist} from 'zustand/middleware';
+type Lang='both'|'en'|'vi';type Study={lang:Lang;answers:Record<string,string>;completed:Record<string,boolean>;setLang:(x:Lang)=>void;setAnswer:(k:string,v:string)=>void;toggle:(k:string)=>void};
+export const useStudy=create<Study>()(persist(set=>({lang:'both',answers:{},completed:{},setLang:lang=>set({lang}),setAnswer:(k,v)=>set(s=>({answers:{...s.answers,[k]:v}})),toggle:k=>set(s=>({completed:{...s.completed,[k]:!s.completed[k]}}))}),{name:'sd-studio-v9'}));
