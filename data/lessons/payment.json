@@ -16,31 +16,46 @@
       0,
       1,
       "Submit idempotency key",
-      "Gửi yêu cầu với khóa idempotency"
+      "Gửi yêu cầu với khóa idempotency",
+      "The client creates one stable key per logical payment and sends it with the amount and currency. On a network retry, the same key and payload are reused.",
+      "Client tạo một key ổn định cho mỗi giao dịch logic, gửi cùng số tiền và loại tiền. Khi retry do lỗi mạng, dùng lại key và payload.",
+      "POST /payments · Idempotency-Key: pay-123"
     ],
     [
       1,
       2,
       "Persist pending attempt",
-      "Lưu trạng thái pending"
+      "Lưu trạng thái pending",
+      "The API authenticates the merchant and inserts a PENDING attempt with a unique merchant/key constraint and a request hash. If an equivalent attempt already exists, it returns that attempt rather than creating another.",
+      "API xác thực merchant, tạo attempt PENDING với unique constraint merchant/key và hash request. Nếu đã tồn tại attempt tương đương thì trả giao dịch cũ, không tạo mới.",
+      "DB: PENDING · UNIQUE(merchant_id, key)"
     ],
     [
       1,
       3,
       "Charge with provider key",
-      "Gọi thanh toán với khóa ổn định"
+      "Gọi thanh toán với khóa ổn định",
+      "After the local commit, the API sends the charge to the provider using a stable provider idempotency key. No database transaction is held open across this network call.",
+      "Sau khi commit local, API gọi provider với idempotency key ổn định. Không giữ transaction DB mở trong lúc gọi mạng.",
+      "Provider key: pay-123"
     ],
     [
       3,
       1,
       "Return provider result",
-      "Trả kết quả thanh toán"
+      "Trả kết quả thanh toán",
+      "The provider returns a verified outcome and its payment reference. A timeout or ambiguous response is not treated as a definitive decline.",
+      "Provider trả kết quả đã xác minh và mã giao dịch. Timeout hoặc phản hồi mơ hồ không được xem là từ chối chắc chắn.",
+      "Provider reference + outcome"
     ],
     [
       1,
       2,
       "Commit final state",
-      "Lưu trạng thái cuối"
+      "Lưu trạng thái cuối",
+      "The API conditionally records the terminal state and provider reference; an outbox event can be committed in the same transaction. The client reads the resulting state via the payment API.",
+      "API cập nhật trạng thái cuối có điều kiện và mã provider; có thể commit outbox cùng transaction. Client đọc trạng thái qua payment API.",
+      "PENDING → SUCCEEDED / FAILED (confirmed only)"
     ]
   ],
   "failure": [
@@ -48,25 +63,37 @@
       1,
       3,
       "Provider charges successfully",
-      "Nhà cung cấp đã trừ tiền"
+      "Nhà cung cấp đã trừ tiền",
+      "The original attempt was already persisted as PENDING. The provider executes the charge successfully, but local state has not yet changed.",
+      "Attempt gốc đã được lưu PENDING. Provider trừ tiền thành công, nhưng trạng thái local chưa thay đổi.",
+      "Provider: charged · DB: PENDING"
     ],
     [
       3,
       1,
       "Response lost: outcome unknown",
-      "Mất phản hồi: chưa rõ kết quả"
+      "Mất phản hồi: chưa rõ kết quả",
+      "The response is lost or the API times out. Since the outcome is unknown, keep PENDING and do not create a new charge with a different key.",
+      "Phản hồi bị mất hoặc API timeout. Vì chưa rõ kết quả, giữ PENDING và không tạo giao dịch mới với key khác.",
+      "Unknown outcome ≠ failure"
     ],
     [
       4,
       3,
       "Query provider by stable key",
-      "Đối soát bằng khóa ổn định"
+      "Đối soát bằng khóa ổn định",
+      "A reconciliation worker scans overdue pending attempts and queries the provider by stable reference/key. Verified webhook events may also trigger reconciliation.",
+      "Worker đối soát quét attempt pending quá hạn và truy vấn provider bằng reference/key ổn định. Webhook đã xác minh cũng có thể kích hoạt đối soát.",
+      "Query status · bounded retries"
     ],
     [
       4,
       2,
       "Reconcile terminal state",
-      "Cập nhật trạng thái đã xác minh"
+      "Cập nhật trạng thái đã xác minh",
+      "If the provider confirms success, atomically transition the attempt to SUCCEEDED and deduplicate downstream events. Escalate unresolved cases instead of assuming failure.",
+      "Nếu provider xác nhận thành công, chuyển attempt sang SUCCEEDED atomically và loại trùng event downstream. Chuyển xử lý thủ công nếu chưa xác định được.",
+      "PENDING → SUCCEEDED · one logical charge"
     ]
   ],
   "qa": [
@@ -95,5 +122,15 @@
       "Broker guarantees cannot make an external payment side effect atomic with a database transaction. I use durable state, provider idempotency and reconciliation, with an outbox for downstream events.",
       "Cam kết của broker không làm giao dịch DB và tác động thanh toán bên ngoài trở thành atomic. Tôi dùng trạng thái bền vững, provider idempotency, đối soát và outbox cho sự kiện downstream."
     ]
-  ]
+  ],
+  "workflowNarration": {
+    "normal": [
+      "I first persist a pending attempt before contacting the provider. A unique idempotency key protects the local write and a stable provider key protects the external charge. I then persist the confirmed outcome.",
+      "Đầu tiên tôi lưu attempt pending trước khi gọi provider. Key duy nhất bảo vệ ghi local và key ổn định ở provider bảo vệ thao tác trừ tiền. Sau đó lưu kết quả đã xác minh."
+    ],
+    "failure": [
+      "The key failure is a successful external charge with a lost response. I treat this as an unknown outcome, not a failure. Reconciliation and safe retries resolve the state without blindly charging again.",
+      "Lỗi trọng tâm là provider đã trừ tiền nhưng mất phản hồi. Tôi xem đây là kết quả chưa rõ, không phải thất bại. Đối soát và retry an toàn giải quyết trạng thái mà không trừ tiền lại mù quáng."
+    ]
+  }
 }
